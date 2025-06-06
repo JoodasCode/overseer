@@ -1,0 +1,330 @@
+# Overseer Backend Development Roadmap
+
+This document outlines the comprehensive development plan for the Overseer backend, structured into three progressive phases with clear priorities and implementation guidelines.
+
+## 🧱 Implementation Plan Overview
+
+The backend development is divided into three phases, each building upon the previous to create a robust, scalable platform for AI agent management.
+
+---
+
+## ✅ Phase 1 – Foundational Core (Highest Priority)
+
+| Area | Task | Status |
+|------|------|--------|
+| **🗄️ Database Schema** | Implement all core tables in Supabase:<br>• `agents`, `tasks`, `agent_memory`, `workflows`, `context_mappings`, `tools`, `users`, `error_logs`<br>Use Prisma for migration scripts | 🟡 In Progress |
+| **🧠 Core APIs** | Build API routes for:<br>• `/api/agents` (CRUD)<br>• `/api/tasks` (create, assign, update status)<br>• `/api/chat/[agentId]` (streamed AI responses)<br>• `/api/workflows` (save/load workflows) | 🔴 Not Started |
+| **🔐 Auth & Security** | Implement:<br>• JWT auth (NextAuth.js or Supabase Auth)<br>• API key support (for agents)<br>• Role-based access (admin, member, agent) | 🔴 Not Started |
+| **💬 AI Integration** | Setup:<br>• Vercel AI SDK or OpenAI SDK<br>• Streaming chat system (SSE or WebSocket fallback)<br>• Agent memory context (basic version) | 🔴 Not Started |
+
+### Phase 1 Implementation Details
+
+#### Database Schema
+
+1. **Create Supabase Tables**:
+   - Define table structures according to schema in `lib/plugin-engine/schema.sql`
+   - Set up proper relationships and constraints
+   - Create indexes for performance optimization
+
+2. **Prisma Integration**:
+   - Set up Prisma schema
+   - Generate client
+   - Create migration scripts
+
+3. **Data Access Layer**:
+   - Create repository pattern for data access
+   - Implement CRUD operations for each entity
+   - Add validation and error handling
+
+#### Core APIs
+
+1. **Agent Management**:
+   - `/api/agents` - List, create, update, delete agents
+   - `/api/agents/:id` - Get agent details
+   - `/api/agents/:id/memory` - Get/update agent memory
+
+2. **Task Management**:
+   - `/api/tasks` - List, create tasks
+   - `/api/tasks/:id` - Update task status, assign to agent
+   - `/api/tasks/:id/complete` - Mark task as complete
+
+3. **Chat System**:
+   - `/api/chat/:agentId` - Stream AI responses
+   - `/api/chat/:agentId/history` - Get chat history
+
+4. **Workflow Management**:
+   - `/api/workflows` - List, create workflows
+   - `/api/workflows/:id` - Get, update, delete workflows
+
+#### Authentication & Security
+
+1. **Auth System**:
+   - Implement JWT or session-based auth
+   - Set up user registration and login
+   - Create middleware for protected routes
+
+2. **API Keys**:
+   - Generate and validate API keys
+   - Implement rate limiting
+   - Add key rotation capabilities
+
+3. **Role-based Access**:
+   - Define roles and permissions
+   - Implement access control middleware
+   - Add role assignment functionality
+
+#### AI Integration
+
+1. **AI Service**:
+   - Set up OpenAI or Anthropic client
+   - Implement streaming response handling
+   - Create prompt engineering system
+
+2. **Agent Context**:
+   - Build context gathering for agents
+   - Implement memory retrieval for context
+   - Create tool calling capabilities
+
+---
+
+## 🧩 Phase 2 – Intelligent Agents & Integrations
+
+| Area | Task | Status |
+|------|------|--------|
+| **📦 Agent Memory** | • Build `agent_memory` system with persistence<br>• Context awareness for each agent<br>• Store: known terms, tools, fallback messages | 🔴 Not Started |
+| **🔌 Integrations** | • Implement Notion, Gmail, Slack adapters<br>• Add OAuth + token refresh logic<br>• Build webhook receivers for Slack + Gmail | 🟡 Partial |
+| **🧠 Knowledge System** | • Add document upload support (PDF, txt)<br>• Parse content and store embeddings<br>• Enable knowledge-based retrieval for chat | 🔴 Not Started |
+| **⚡ Real-time Events** | • WebSocket server setup (or SSE)<br>• Trigger updates: new task, agent status, tool state<br>• Stream logs to dashboard | 🔴 Not Started |
+
+### Phase 2 Implementation Details
+
+#### Agent Memory System
+
+1. **Memory Storage**:
+   - Implement long-term and short-term memory
+   - Create memory retrieval system
+   - Add memory pruning and prioritization
+
+2. **Context Awareness**:
+   - Build context gathering from multiple sources
+   - Implement relevance scoring
+   - Create context window management
+
+#### Integration Hub
+
+1. **Adapter Implementation**:
+   - Complete Notion, Gmail, Slack adapters
+   - Add Asana and other integrations
+   - Create adapter registry
+
+2. **OAuth System**:
+   - Implement OAuth flow for each service
+   - Add token storage and encryption
+   - Create token refresh mechanism
+
+3. **Webhook Handlers**:
+   - Set up webhook endpoints for each service
+   - Implement event processing
+   - Create notification system
+
+#### Knowledge System
+
+1. **Document Processing**:
+   - Implement file upload and storage
+   - Create text extraction for different formats
+   - Build chunking and embedding system
+
+2. **Knowledge Retrieval**:
+   - Implement semantic search
+   - Create relevance scoring
+   - Build knowledge integration with chat
+
+#### Real-time Features
+
+1. **WebSocket Server**:
+   - Set up WebSocket or SSE infrastructure
+   - Implement connection management
+   - Create event broadcasting system
+
+2. **Event System**:
+   - Define event types and payloads
+   - Implement event triggers
+   - Create subscription mechanism
+
+---
+
+## ⚙️ Phase 3 – Power Features & Expansion
+
+| Area | Task | Status |
+|------|------|--------|
+| **🎯 Workflow Engine** | • Visual node runner<br>• Trigger-condition-action system<br>• Node processor registry<br>• Schedule execution logic | 🔴 Not Started |
+| **📁 File Storage** | • Enable uploads via Supabase Storage or S3<br>• Connect file uploads to agents<br>• Link knowledge to files | 🔴 Not Started |
+| **📊 Monitoring & Analytics** | • Build `/api/monitoring` routes<br>• Track:<br>— Agent XP trends<br>— Task volume<br>— Error rate per tool<br>— Latency/response time | 🟡 Partial |
+| **📚 Docs & Config** | • Add `/api/docs` endpoint for dynamic agent docs<br>• Implement per-agent configuration panel | 🔴 Not Started |
+
+### Phase 3 Implementation Details
+
+#### Workflow Engine
+
+1. **Node System**:
+   - Define node types and interfaces
+   - Implement node processors
+   - Create node registry
+
+2. **Workflow Runner**:
+   - Build execution engine
+   - Implement state management
+   - Create error handling and recovery
+
+3. **Scheduling**:
+   - Implement cron-based scheduling
+   - Create trigger system
+   - Build execution history
+
+#### File Storage
+
+1. **Storage System**:
+   - Set up Supabase Storage or S3
+   - Implement file upload and retrieval
+   - Create file metadata management
+
+2. **File Processing**:
+   - Implement file type detection
+   - Create preview generation
+   - Build file versioning
+
+#### Monitoring & Analytics
+
+1. **Metrics Collection**:
+   - Define key metrics to track
+   - Implement data collection
+   - Create aggregation functions
+
+2. **Dashboard APIs**:
+   - Build analytics endpoints
+   - Create visualization data formatters
+   - Implement trend analysis
+
+#### Documentation & Configuration
+
+1. **Dynamic Documentation**:
+   - Create documentation generator
+   - Implement API reference
+   - Build interactive examples
+
+2. **Configuration System**:
+   - Implement agent configuration
+   - Create system settings
+   - Build configuration UI endpoints
+
+---
+
+## 📂 Recommended File/Folder Structure
+
+```
+/app
+  /api
+    /agents
+      /[id]
+        /memory
+        /route.ts
+      /route.ts
+    /tasks
+      /[id]
+        /complete
+        /route.ts
+      /route.ts
+    /chat
+      /[agentId]
+        /history
+        /route.ts
+      /route.ts
+    /workflows
+      /[id]
+        /execute
+        /route.ts
+      /route.ts
+    /plugin-engine
+      /context-mappings
+      /errors
+      /integrations
+      /tasks
+  /dashboard
+    /agents
+    /tasks
+    /workflows
+    /integrations
+    /monitoring
+  /lib
+    /ai
+      /chat.ts
+      /memory.ts
+      /tools.ts
+    /auth
+      /jwt.ts
+      /roles.ts
+    /db
+      /prisma
+      /repositories
+      /migrations
+    /integrations
+      /notion-adapter.ts
+      /gmail-adapter.ts
+      /slack-adapter.ts
+    /plugin-engine
+      /error-handler.ts
+      /plugin-engine.ts
+      /context-mapper.ts
+      /scheduler.ts
+    /utils
+      /date.ts
+      /encryption.ts
+      /validation.ts
+    /workflows
+      /engine.ts
+      /nodes.ts
+      /processors.ts
+```
+
+## 🚀 Next Steps
+
+1. **Database Schema Design**
+   - Finalize all table models (Supabase + Prisma)
+   - Create schema and migration scripts
+   - Set up indexes for performance
+
+2. **Core API Endpoints**
+   - Implement `/api/agents` and `/api/tasks` first
+   - Add `/api/chat/[agentId]` with AI streaming
+   - Create basic workflow storage
+
+3. **Authentication**
+   - Choose between Supabase Auth or JWT setup
+   - Implement role-based access control
+   - Secure all API routes
+
+## 📊 Progress Tracking
+
+| Phase | Component | Progress | ETA |
+|-------|-----------|----------|-----|
+| 1 | Database Schema | 100% | ✅ Completed Jun 6, 2025 |
+| 1 | Core APIs | 5% | TBD |
+| 1 | Auth & Security | 10% | TBD |
+| 1 | AI Integration | 0% | TBD |
+| 2 | Agent Memory | 0% | TBD |
+| 2 | Integrations | 20% | TBD |
+| 2 | Knowledge System | 0% | TBD |
+| 2 | Real-time Events | 0% | TBD |
+| 3 | Workflow Engine | 0% | TBD |
+| 3 | File Storage | 0% | TBD |
+| 3 | Monitoring & Analytics | 15% | TBD |
+| 3 | Docs & Config | 0% | TBD |
+
+## 📝 Notes
+
+- ✅ Database schema has been successfully implemented in Supabase (June 6, 2025)
+- ✅ Test data creation and validation scripts are in place
+- Error handling system has been implemented and tested
+- Adapter interfaces exist but need completion
+- Focus on Supabase and Redis integration throughout implementation
+- Follow Airbnb Style Guide for code formatting

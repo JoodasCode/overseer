@@ -1,0 +1,277 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model extended from Supabase auth.users
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  display_name String?
+  avatar_url   String?
+  preferences  Json?    @default("{}") @db.JsonB
+  metadata     Json?    @default("{}") @db.JsonB
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  agents             Agent[]
+  tasks              Task[]
+  workflows          Workflow[]
+  workflowExecutions WorkflowExecution[]
+  errorLogs          ErrorLog[]
+  integrations       Integration[]
+  knowledgeBase      KnowledgeBase[]
+  chatMessages       ChatMessage[]
+}
+
+// Agent model
+model Agent {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  name        String
+  description String?
+  avatar_url  String?
+  tools       Json?    @default("{}") @db.JsonB
+  stats       Json?    @default("{}") @db.JsonB
+  preferences Json?    @default("{}") @db.JsonB
+  metadata    Json?    @default("{}") @db.JsonB
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  agentMemory  AgentMemory[]
+  memoryLogs   MemoryLog[]
+  tasks        Task[]
+  chatMessages ChatMessage[]
+  errorLogs    ErrorLog[]
+
+  @@index([user_id])
+  @@index([name])
+}
+
+// Agent Memory model
+model AgentMemory {
+  id         String   @id @default(uuid()) @db.Uuid
+  agent_id   String   @db.Uuid
+  key        String
+  value      String
+  type       String   @default("string")
+  embedding  Float[] // Vector type for embeddings
+  metadata   Json?    @default("{}") @db.JsonB
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  agent Agent @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+
+  @@unique([agent_id, key])
+  @@index([agent_id])
+  @@index([key])
+}
+
+// Memory Logs model
+model MemoryLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  agent_id   String   @db.Uuid
+  operation  String // 'create', 'update', 'delete'
+  key        String
+  old_value  String?
+  new_value  String?
+  metadata   Json?    @default("{}") @db.JsonB
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  agent Agent @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+
+  @@index([agent_id])
+  @@index([key])
+  @@index([created_at])
+}
+
+// Tasks model
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Task {
+  id           String       @id @default(uuid()) @db.Uuid
+  user_id      String       @db.Uuid
+  agent_id     String?      @db.Uuid
+  title        String
+  description  String?
+  status       TaskStatus   @default(PENDING)
+  priority     TaskPriority @default(MEDIUM)
+  due_date     DateTime?    @db.Timestamptz(6)
+  metadata     Json?        @default("{}") @db.JsonB
+  created_at   DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime     @default(now()) @db.Timestamptz(6)
+  completed_at DateTime?    @db.Timestamptz(6)
+
+  // Relations
+  user  User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  agent Agent? @relation(fields: [agent_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([agent_id])
+  @@index([status])
+  @@index([priority])
+  @@index([due_date])
+}
+
+// Chat Messages model
+model ChatMessage {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  agent_id   String   @db.Uuid
+  content    String
+  role       String // 'user', 'assistant', 'system'
+  metadata   Json?    @default("{}") @db.JsonB
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([agent_id])
+  @@index([created_at])
+}
+
+// Workflows model
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model Workflow {
+  id          String         @id @default(uuid()) @db.Uuid
+  user_id     String         @db.Uuid
+  name        String
+  description String?
+  status      WorkflowStatus @default(DRAFT)
+  triggers    Json?          @default("{}") @db.JsonB
+  actions     Json?          @default("{}") @db.JsonB
+  config      Json?          @default("{}") @db.JsonB
+  created_at  DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime       @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user       User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+
+  @@index([user_id])
+  @@index([status])
+}
+
+// Workflow Executions model
+enum WorkflowExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model WorkflowExecution {
+  id           String                  @id @default(uuid()) @db.Uuid
+  workflow_id  String                  @db.Uuid
+  user_id      String                  @db.Uuid
+  status       WorkflowExecutionStatus @default(PENDING)
+  trigger_data Json?                   @default("{}") @db.JsonB
+  result       Json?                   @default("{}") @db.JsonB
+  error        String?
+  started_at   DateTime                @default(now()) @db.Timestamptz(6)
+  completed_at DateTime?               @db.Timestamptz(6)
+
+  // Relations
+  workflow Workflow @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([workflow_id])
+  @@index([user_id])
+  @@index([status])
+  @@index([started_at])
+}
+
+// Error Logs model
+model ErrorLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  user_id       String   @db.Uuid
+  agent_id      String?  @db.Uuid
+  error_type    String
+  error_message String
+  stack_trace   String?
+  context       Json?    @default("{}") @db.JsonB
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user  User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  agent Agent? @relation(fields: [agent_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([agent_id])
+  @@index([error_type])
+  @@index([created_at])
+}
+
+// Integrations model
+model Integration {
+  id               String    @id @default(uuid()) @db.Uuid
+  user_id          String    @db.Uuid
+  service_name     String // 'notion', 'gmail', 'slack', etc.
+  service_id       String?
+  access_token     String?
+  refresh_token    String?
+  token_expires_at DateTime? @db.Timestamptz(6)
+  config           Json?     @default("{}") @db.JsonB
+  status           String    @default("active") // 'active', 'inactive', 'error'
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([service_name])
+  @@index([status])
+}
+
+// Knowledge Base model
+model KnowledgeBase {
+  id           String   @id @default(uuid()) @db.Uuid
+  user_id      String   @db.Uuid
+  title        String
+  content      String
+  content_type String // 'text', 'document', 'url', etc.
+  embedding    Float[] // Vector type for embeddings
+  metadata     Json?    @default("{}") @db.JsonB
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([content_type])
+}
