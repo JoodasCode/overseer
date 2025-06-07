@@ -9,7 +9,8 @@ import { Scheduler } from './scheduler';
 import { ErrorHandler } from './error-handler';
 import { IntegrationManager } from './integration-manager';
 import { BaseAdapter } from './adapters/base-adapter';
-import { TaskMasterAdapter } from './adapters/task-master-adapter';
+import { TrelloAdapter } from './adapters/trello-adapter';
+import { AsanaAdapter } from './adapters/asana-adapter';
 import { PluginAdapter, TaskIntent, ScheduledTask, PluginResult, ErrorLog } from './types';
 
 // Initialize Supabase client
@@ -44,12 +45,13 @@ export class PluginEngine {
    * Initialize and register default adapters
    */
   private initializeAdapters(): void {
-    // Register Task Master adapter
-    const taskMasterAdapter = new TaskMasterAdapter(
-      this.integrationManager,
-      this.errorHandler
-    );
-    this.registerAdapter('task-master', taskMasterAdapter);
+    // Register Trello adapter
+    const trelloAdapter = new TrelloAdapter(this.errorHandler);
+    this.registerAdapter('trello', trelloAdapter);
+    
+    // Register Asana adapter
+    const asanaAdapter = new AsanaAdapter();
+    this.registerAdapter('asana', asanaAdapter);
   }
 
   /**
