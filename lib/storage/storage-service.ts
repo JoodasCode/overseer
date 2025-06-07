@@ -1,23 +1,22 @@
 /**
  * Storage Service
  * 
- * This service provides a unified interface for file storage operations
- * across different storage providers (local filesystem, S3, etc.)
- * 
+ * Handles file storage operations for the Overseer platform.
  * Following Airbnb Style Guide for code formatting.
  */
 
-import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { 
-  StorageProvider, 
-  StorageConfig, 
-  FileMetadata, 
+import { v4 as uuidv4 } from 'uuid';
+import {
+  StorageConfig,
+  StorageProvider,
+  FileMetadata,
   UploadOptions,
   PresignedUrlOptions,
   StorageStats,
 } from './types';
+import { S3Provider } from './s3-provider';
 import { ErrorHandler } from '../error-handler';
 import prisma from '../db/prisma';
 
@@ -35,7 +34,7 @@ const DEFAULT_PRESIGNED_URL_OPTIONS: PresignedUrlOptions = {
 
 export class StorageService {
   private config: StorageConfig;
-  private s3Client: any; // Will be initialized if using S3
+  private s3Provider?: S3Provider;
   private errorHandler: ErrorHandler;
 
   constructor(config: StorageConfig, errorHandler: ErrorHandler) {
@@ -44,8 +43,7 @@ export class StorageService {
 
     // Initialize the appropriate client based on the provider
     if (config.provider === StorageProvider.S3) {
-      // We'll implement S3 client initialization later
-      // this.s3Client = new S3Client({ ... });
+      this.s3Provider = new S3Provider(config, errorHandler);
     } else if (config.provider === StorageProvider.LOCAL) {
       // Ensure the local storage directory exists
       if (config.localPath) {
@@ -92,7 +90,7 @@ export class StorageService {
       }
 
       // Generate a unique ID for the file
-      const fileId = randomUUID();
+      const fileId = uuidv4();
       
       // Create a safe file path
       const safeName = this.sanitizeFileName(fileName);
@@ -272,33 +270,22 @@ export class StorageService {
     fileName: string,
     ownerId: string,
     options: PresignedUrlOptions = {},
-  ): Promise<{ url: string; fileId: string; fields?: Record<string, string> }> {
+  ): Promise<{ url: string; fileId: string; fields?: Record<string, string>; expiresAt: Date }> {
     try {
       // Only supported for S3 provider
       if (this.config.provider !== StorageProvider.S3) {
         throw new Error('Presigned URLs are only supported for S3 storage');
       }
 
+      if (!this.s3Provider) {
+        throw new Error('S3 provider not initialized');
+      }
+
       // Merge with default options
       const mergedOptions = { ...DEFAULT_PRESIGNED_URL_OPTIONS, ...options };
       
-      // Generate a unique ID for the file
-      const fileId = randomUUID();
-      
-      // Create a safe file path
-      const safeName = this.sanitizeFileName(fileName);
-      const filePath = `${ownerId}/${fileId}/${safeName}`;
-
-      // We'll implement S3 presigned URL generation later
-      // For now, return a placeholder
-      return {
-        url: 'https://example.com/presigned-url',
-        fileId,
-        fields: {
-          key: filePath,
-          'Content-Type': mergedOptions.contentType || 'application/octet-stream',
-        },
-      };
+      // Generate presigned URL using the S3 provider
+      return this.s3Provider.generatePresignedUploadUrl(fileName, ownerId, mergedOptions);
     } catch (error) {
       this.errorHandler.handle({
         error: error as Error,
@@ -325,17 +312,17 @@ export class StorageService {
 
       // Calculate statistics
       const totalFiles = files.length;
-      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+      const totalSize = files.reduce((sum: number, file) => sum + file.size, 0);
       
       // Calculate usage by provider
-      const usageByProvider = files.reduce((acc, file) => {
+      const usageByProvider = files.reduce((acc: Record<string, number>, file) => {
         const provider = file.provider as StorageProvider;
         acc[provider] = (acc[provider] || 0) + file.size;
         return acc;
-      }, {} as Record<StorageProvider, number>);
+      }, {} as Record<string, number>);
       
       // Calculate usage by MIME type
-      const usageByMimeType = files.reduce((acc, file) => {
+      const usageByMimeType = files.reduce((acc: Record<string, number>, file) => {
         acc[file.mimeType] = (acc[file.mimeType] || 0) + file.size;
         return acc;
       }, {} as Record<string, number>);
@@ -412,9 +399,11 @@ export class StorageService {
     mimeType: string,
     isPublic: boolean = false,
   ): Promise<string> {
-    // We'll implement S3 upload later
-    // For now, return a placeholder URL
-    return `https://${this.config.bucketName}.s3.amazonaws.com/${filePath}`;
+    if (!this.s3Provider) {
+      throw new Error('S3 provider not initialized');
+    }
+    
+    return this.s3Provider.uploadFile(file, filePath, mimeType);
   }
 
   /**
@@ -424,9 +413,11 @@ export class StorageService {
    * @returns The file buffer
    */
   private async getFromS3(filePath: string): Promise<Buffer> {
-    // We'll implement S3 download later
-    // For now, return an empty buffer
-    return Buffer.from([]);
+    if (!this.s3Provider) {
+      throw new Error('S3 provider not initialized');
+    }
+    
+    return this.s3Provider.getFile(filePath);
   }
 
   /**
@@ -435,7 +426,14 @@ export class StorageService {
    * @param filePath - The path of the file to delete
    */
   private async deleteFromS3(filePath: string): Promise<void> {
-    // We'll implement S3 deletion later
+    if (!this.s3Provider) {
+      throw new Error('S3 provider not initialized');
+    }
+    
+    const success = await this.s3Provider.deleteFile(filePath);
+    if (!success) {
+      throw new Error(`Failed to delete file from S3: ${filePath}`);
+    }
   }
 
   /**

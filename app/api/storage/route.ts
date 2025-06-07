@@ -7,20 +7,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { StorageService } from '@/lib/storage/storage-service';
-import { StorageProvider } from '@/lib/storage/types';
+import { getStorageService } from '@/lib/storage';
 import { ErrorHandler } from '@/lib/error-handler';
 import prisma from '@/lib/db/prisma';
 
 // Initialize services
 const errorHandler = new ErrorHandler();
-const storageService = new StorageService(
-  {
-    provider: StorageProvider.LOCAL,
-    localPath: process.env.LOCAL_STORAGE_PATH || './storage',
-  },
-  errorHandler,
-);
+const storageService = getStorageService();
 
 /**
  * GET /api/storage

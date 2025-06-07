@@ -15,9 +15,10 @@ export interface StorageConfig {
   bucketName?: string;
   region?: string;
   endpoint?: string;
-  accessKey?: string;
-  secretKey?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   localPath?: string;
+  maxSizeBytes?: number;
 }
 
 export interface FileMetadata {

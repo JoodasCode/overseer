@@ -187,7 +187,7 @@ The backend development is divided into three phases, each building upon the pre
 | Area | Task | Status |
 |------|------|--------|
 | **🎯 Workflow Engine** | • Visual node runner<br>• Trigger-condition-action system<br>• Node processor registry<br>• Schedule execution logic | 🟡 In Progress |
-| **📁 File Storage** | • Enable uploads via Supabase Storage or S3<br>• Connect file uploads to agents<br>• Link knowledge to files | 🔴 Not Started |
+| **📁 File Storage** | • ✅ Enable uploads via Supabase Storage or S3<br>• ✅ Connect file uploads to agents<br>• Link knowledge to files | 🟡 In Progress |
 | **📊 Monitoring & Analytics** | • Build `/api/monitoring` routes<br>• Track:<br>— Agent XP trends<br>— Task volume<br>— Error rate per tool<br>— Latency/response time<br>— Token usage and credit consumption | 🟡 Partial |
 | **💳 LLM Billing System** | • Implement credit-based usage tracking<br>• Build BYO-LLM provider system<br>• Create `/api/llm/stream`, `/api/usage` and `/api/plans` routes<br>• Integrate Stripe for add-on credit purchases<br>• Admin dashboard for Teams/Enterprise | 🔴 Not Started |
 | **📚 Docs & Config** | • Add `/api/docs` endpoint for dynamic agent docs<br>• Implement per-agent configuration panel | 🔴 Not Started |
@@ -199,6 +199,33 @@ The backend development is divided into three phases, each building upon the pre
 1. **Node System**:
    - Define node types and interfaces
    - Implement node processors
+   - Create node execution engine
+   - Build workflow state management
+
+#### File Storage System
+
+1. **Storage Provider Architecture**:
+   - ✅ Implemented modular storage service with provider pattern
+   - ✅ Created local filesystem provider for development
+   - ✅ Built AWS S3 provider for production
+   - ✅ Added factory pattern for consistent service initialization
+
+2. **API Integration**:
+   - ✅ Built `/api/storage` routes for file operations
+   - ✅ Implemented file upload with metadata tracking
+   - ✅ Added file retrieval and deletion endpoints
+   - ✅ Created presigned URL generation for direct uploads
+   - ✅ Implemented storage statistics endpoint
+
+3. **Database Integration**:
+   - ✅ Added File model to Prisma schema
+   - ✅ Created relations between User and File models
+   - ✅ Implemented file metadata tracking
+
+4. **Security & Access Control**:
+   - ✅ Added authentication checks for all storage endpoints
+   - ✅ Implemented file ownership verification
+   - ✅ Created public/private file access controls
    - Create node registry
 
 2. **Workflow Runner**:

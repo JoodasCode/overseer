@@ -15,6 +15,7 @@ A comprehensive, production-ready AI agent management system that transforms bus
 - **Memory System**: Agents learn and remember from interactions
 - **Automation Hub**: Set up workflows and agent collaborations
 - **Real-time Chat**: Engage with agents in real-time through a chat interface
+- **File Storage**: Upload, manage, and share files with modular storage system
 
 ### 🎨 Customization
 - **Emoji Selection**: Choose from curated emoji sets for each agent
@@ -87,11 +88,17 @@ agents-os/
 │   └── shared/                  # Shared utility components
 ├── lib/                         # Utilities and types
 │   ├── types.ts                 # TypeScript type definitions
-│   └── utils.ts                 # Utility functions
+│   ├── utils.ts                 # Utility functions
+│   ├── storage/                 # Storage system
+│   │   ├── index.ts            # Storage service factory
+│   │   ├── config.ts           # Storage configuration
+│   │   ├── local-provider.ts   # Local filesystem provider
+│   │   ├── s3-provider.ts      # AWS S3 storage provider
+│   │   └── types.ts            # Storage interfaces and types
 ├── public/                      # Static assets
 │   └── agents/                  # Agent avatar images
 └── README.md                    # This file
-\`\`\`
+```
 
 ---
 

@@ -7,29 +7,20 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { StorageService } from '@/lib/storage/storage-service';
-import { StorageProvider } from '@/lib/storage/types';
-import { ErrorHandler } from '@/lib/error-handler';
+import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
+import { ErrorHandler } from '@/lib/error-handler';
+import { checkUsageLimit } from '@/lib/billing/subscription-utils';
+import { ResourceType } from '@/lib/billing/types';
+import { getStorageService } from '@/lib/storage';
 
-// Initialize services
 const errorHandler = new ErrorHandler();
-const storageService = new StorageService(
-  {
-    provider: StorageProvider.S3,
-    bucketName: process.env.S3_BUCKET_NAME,
-    region: process.env.S3_REGION,
-    accessKey: process.env.S3_ACCESS_KEY,
-    secretKey: process.env.S3_SECRET_KEY,
-  },
-  errorHandler,
-);
 
 /**
  * POST /api/storage/presigned
  * Generate a presigned URL for direct file upload
  */
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     // Get user session
     const session = await getServerSession();
@@ -48,8 +39,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Parse request body
-    const body = await req.json();
-    const { fileName, contentType, isPublic, expiresInSeconds, maxSizeBytes, metadata } = body;
+    const body = await request.json();
+    const { fileName, mimeType, isPublic, maxSizeBytes } = body;
 
     if (!fileName) {
       return NextResponse.json(
@@ -59,9 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check subscription limits for storage
-    // This would integrate with the subscription-utils.ts to check storage limits
-    // For now, we'll just check if the user is allowed to upload files
-    const canUpload = await checkStorageLimit(user.id);
+    const canUpload = await checkUsageLimit(user.id, ResourceType.Storage);
     if (!canUpload) {
       return NextResponse.json(
         { error: 'Storage limit exceeded' },
@@ -69,38 +58,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate presigned URL
-    const presignedData = await storageService.generatePresignedUploadUrl(
+    // Get the storage service instance
+    const storageService = getStorageService();
+
+    // Generate a presigned URL for direct upload to S3
+    const presignedUrl = await storageService.generatePresignedUploadUrl(
       fileName,
-      user.id,
+      session.user.id,
       {
-        contentType,
-        expiresInSeconds,
-        maxSizeBytes,
-      },
+        contentType: mimeType,
+        maxSizeBytes: maxSizeBytes,
+        expiresInSeconds: 3600, // 1 hour
+      }
     );
 
-    // Create a placeholder file record
-    const fileRecord = await prisma.file.create({
+    // Create a placeholder file record in the database
+    // We'll update this when the upload is confirmed
+    await prisma.file.create({
       data: {
-        id: presignedData.fileId,
+        id: presignedUrl.fileId,
         name: fileName,
         size: 0, // Will be updated after upload
-        mimeType: contentType || 'application/octet-stream',
-        path: presignedData.fields?.key || '',
-        url: null, // Will be updated after upload
-        provider: StorageProvider.S3,
-        ownerId: user.id,
+        mimeType,
+        path: presignedUrl.fields?.key || `${session.user.id}/${presignedUrl.fileId}/${fileName}`,
+        provider: 'S3',
+        ownerId: session.user.id,
         isPublic: isPublic || false,
-        metadata: metadata || {},
+        metadata: {},
       },
     });
 
+    // Return the presigned URL and file ID
     return NextResponse.json({
-      ...presignedData,
+      presignedUrl,
       file: {
-        id: fileRecord.id,
-        name: fileRecord.name,
+        id: presignedUrl.fileId,
+        name: fileName,
       },
     });
   } catch (error) {
