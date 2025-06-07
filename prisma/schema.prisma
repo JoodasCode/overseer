@@ -33,6 +33,7 @@ model User {
   integrations       Integration[]
   knowledgeBase      KnowledgeBase[]
   chatMessages       ChatMessage[]
+  files              File[]
 }
 
 // Agent model
@@ -277,4 +278,26 @@ model KnowledgeBase {
 
   @@index([user_id])
   @@index([content_type])
+}
+
+// File Storage model
+model File {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  size      Int
+  mimeType  String
+  path      String
+  url       String?
+  provider  String
+  ownerId   String   @db.Uuid
+  isPublic  Boolean  @default(false)
+  metadata  Json?    @default("{}") @db.JsonB
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([mimeType])
 }

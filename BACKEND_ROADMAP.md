@@ -373,7 +373,7 @@ The backend development is divided into three phases, each building upon the pre
 | 2 | Knowledge System | 100% | ✅ Completed Jun 8, 2025 |
 | 2 | Real-time Events | 0% | TBD |
 | 3 | Workflow Engine | 30% | In Progress |
-| 3 | File Storage | 0% | TBD |
+| 3 | File Storage | 50% | In Progress |
 | 3 | Monitoring & Analytics | 15% | TBD |
 | 3 | LLM Billing System | 90% | ✅ Mostly Complete |
 | 3 | Docs & Config | 0% | TBD |
