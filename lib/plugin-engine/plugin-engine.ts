@@ -7,7 +7,9 @@ import { createClient } from '@supabase/supabase-js';
 import { Redis } from '@upstash/redis';
 import { Scheduler } from './scheduler';
 import { ErrorHandler } from './error-handler';
+import { IntegrationManager } from './integration-manager';
 import { BaseAdapter } from './adapters/base-adapter';
+import { TaskMasterAdapter } from './adapters/task-master-adapter';
 import { PluginAdapter, TaskIntent, ScheduledTask, PluginResult, ErrorLog } from './types';
 
 // Initialize Supabase client
@@ -26,11 +28,28 @@ export class PluginEngine {
   private adapters: Map<string, PluginAdapter> = new Map();
   private scheduler: Scheduler;
   private errorHandler: ErrorHandler;
+  private integrationManager: IntegrationManager;
 
   private constructor() {
     // Private constructor for singleton pattern
     this.scheduler = Scheduler.getInstance();
     this.errorHandler = ErrorHandler.getInstance();
+    this.integrationManager = IntegrationManager.getInstance();
+    
+    // Initialize adapters
+    this.initializeAdapters();
+  }
+  
+  /**
+   * Initialize and register default adapters
+   */
+  private initializeAdapters(): void {
+    // Register Task Master adapter
+    const taskMasterAdapter = new TaskMasterAdapter(
+      this.integrationManager,
+      this.errorHandler
+    );
+    this.registerAdapter('task-master', taskMasterAdapter);
   }
 
   /**
