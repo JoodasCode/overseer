@@ -23,6 +23,44 @@ Plugin adapters implement the `PluginAdapter` interface to provide standardized 
 - **GmailAdapter**: Handles Gmail API operations like sending emails, creating drafts, and fetching messages.
 - **NotionAdapter**: Manages Notion API operations like creating pages, updating content, and querying databases.
 - **SlackAdapter**: Handles Slack API operations like sending messages, scheduling messages, and fetching channel history.
+- **TrelloAdapter**: Manages Trello API operations like creating cards, updating cards, and fetching boards, lists, and cards.
+- **AsanaAdapter**: Manages Asana API operations like creating tasks, updating tasks, and fetching workspaces, projects, and tasks.
+
+## Webhook System
+
+The plugin engine includes a comprehensive webhook system for handling events from integrated services. This system enables real-time updates and event-driven workflows.
+
+### Components
+
+#### 1. Webhook Handlers
+
+Endpoint handlers for each service that receive and process webhook events:
+
+- `/api/plugin-engine/webhooks/slack.ts`: Handles Slack events with signature verification
+- `/api/plugin-engine/webhooks/gmail.ts`: Processes Gmail notifications via Google Pub/Sub
+- `/api/plugin-engine/webhooks/asana.ts`: Manages Asana webhooks with HMAC verification
+
+#### 2. Event Storage
+
+Webhook events are stored in the database for reliable processing:
+
+- `webhook_events` table: Stores events from all providers with metadata
+- Events include provider, team/user IDs, event type, payload, and status
+
+#### 3. Subscription Management
+
+API for managing webhook subscriptions:
+
+- `/api/plugin-engine/webhooks/subscriptions.ts`: Create, list, and delete subscriptions
+- `webhook_subscriptions` table: Stores subscription data and status
+
+#### 4. Token Refresh Mechanism
+
+Automatically refreshes OAuth tokens and renews webhook subscriptions:
+
+- `/api/plugin-engine/webhooks/refresh.ts`: Refreshes tokens and subscriptions
+- Handles provider-specific refresh flows
+- Updates subscription status and handles errors
 
 ## Database Schema
 

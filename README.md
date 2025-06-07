@@ -522,10 +522,10 @@ const availableAgents = [
     defaultEmoji: "🎯"
   }
 ]
-\`\`\`
+```
 
 ### Adding New Integrations
-\`\`\`typescript
+```typescript
 // Update components/integration-hub.tsx
 const availableIntegrations = [
   {
@@ -538,10 +538,77 @@ const availableIntegrations = [
     permissions: ["Read data", "Write data"]
   }
 ]
-\`\`\`
+```
+
+### Webhook System
+
+Overseer includes a comprehensive webhook system for integrating with external services. The system handles webhook events from various providers, manages subscriptions, and ensures tokens are refreshed when needed.
+
+#### Webhook Components
+
+1. **Webhook Handlers**
+   - Endpoint handlers for Slack, Gmail, Asana, and other services
+   - Signature verification and security validation
+   - Asynchronous event processing
+
+2. **Event Storage**
+   - Database tables for storing webhook events
+   - Efficient indexing for quick retrieval
+   - Status tracking for event processing
+
+3. **Subscription Management**
+   - Create, list, and delete webhook subscriptions
+   - Provider-specific subscription handling
+   - Subscription status monitoring
+
+4. **Token Refresh Mechanism**
+   - Automatic refresh of expiring OAuth tokens
+   - Renewal of webhook subscriptions
+   - Error handling and reporting
+
+#### Adding a New Webhook Handler
+
+```typescript
+// pages/api/plugin-engine/webhooks/new-provider.ts
+import { NextApiRequest, NextApiResponse } from 'next';
+import { createClient } from '@supabase/supabase-js';
+import { ErrorHandler } from '../../../../lib/plugin-engine/error-handler';
+
+// Initialize error handler
+const errorHandler = ErrorHandler.getInstance();
+
+// Define error logging helper
+const logError = (error: unknown, action: string) => {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  errorHandler.logError({
+    tool: 'new-provider',
+    action,
+    errorCode: 'NEW_PROVIDER_WEBHOOK_ERROR',
+    errorMessage: errorMessage,
+    agentId: 'system',
+    userId: 'system',
+    payload: { details: JSON.stringify(error) },
+    timestamp: new Date().toISOString(),
+    resolved: false
+  }).catch(console.error);
+};
+
+// Implement your webhook handler
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    // Verify webhook signature
+    // Process webhook event
+    // Store event in database
+    // Return appropriate response
+  } catch (error) {
+    logError(error, 'handler');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+```
 
 ### Adding New Workflow Nodes
-\`\`\`typescript
+```typescript
 // Update components/workflow-builder.tsx
 const nodeTypes = {
   triggers: [

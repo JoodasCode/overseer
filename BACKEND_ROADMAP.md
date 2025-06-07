@@ -99,7 +99,7 @@ The backend development is divided into three phases, each building upon the pre
 | Area | Task | Status |
 |------|------|--------|
 | **📦 Agent Memory** | • Build `agent_memory` system with persistence<br>• Context awareness for each agent<br>• Store: known terms, tools, fallback messages | 🟡 In Progress |
-| **🔌 Integrations** | • Implement Notion, Gmail, Slack adapters<br>• Add OAuth + token refresh logic<br>• Build webhook receivers for Slack + Gmail | 🟡 Partial |
+| **🔌 Integrations** | • ✅ Implement Notion, Gmail, Slack, Trello, Asana adapters<br>• Add OAuth + token refresh logic<br>• ✅ Build webhook system (receivers, storage, subscriptions, refresh) | 🟢 Mostly Complete |
 | **🧠 Knowledge System** | • Add document upload support (PDF, txt)<br>• Parse content and store embeddings<br>• Enable knowledge-based retrieval for chat | 🟡 In Progress |
 | **⚡ Real-time Events** | • WebSocket server setup (or SSE)<br>• Trigger updates: new task, agent status, tool state<br>• Stream logs to dashboard | 🔴 Not Started |
 
@@ -120,19 +120,26 @@ The backend development is divided into three phases, each building upon the pre
 #### Integration Hub
 
 1. **Adapter Implementation**:
-   - Complete Notion, Gmail, Slack adapters
-   - Add Asana and other integrations
-   - Create adapter registry
+   - ✅ Complete Notion, Gmail, Slack adapters
+   - ✅ Implement Trello adapter with OAuth support
+   - ✅ Implement Asana adapter with OAuth support
+   - Add other integrations (Jira, GitHub, etc.)
+   - ✅ Create adapter registry
 
 2. **OAuth System**:
    - Implement OAuth flow for each service
    - Add token storage and encryption
-   - Create token refresh mechanism
 
-3. **Webhook Handlers**:
-   - Set up webhook endpoints for each service
-   - Implement event processing
-   - Create notification system
+3. **Webhook System**:
+   - ✅ Implement webhook handlers for Slack, Gmail, and Asana
+   - ✅ Create webhook event storage and processing
+   - ✅ Add webhook subscription management
+   - ✅ Create token refresh mechanism
+
+4. **Notification System**:
+   - Set up real-time notification delivery
+   - Implement user notification preferences
+   - Create notification center UI
 
 #### Knowledge System
 
