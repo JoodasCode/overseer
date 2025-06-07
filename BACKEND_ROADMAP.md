@@ -237,29 +237,30 @@ The backend development is divided into three phases, each building upon the pre
 
 #### LLM Billing System
 
-1. **Credit-based Usage Tracking**:
-   - Implement token counting for input/output
-   - Create credit conversion system based on model cost
-   - Build usage tracking and quota enforcement
-   - Set up usage alerts and notifications
+1. **Credit-based Usage Tracking**: ✅
+   - ✅ Implemented token counting for input/output with model-specific cost ratios
+   - ✅ Created credit conversion system based on model cost
+   - ✅ Built usage tracking and quota enforcement with plan-specific limits
+   - ✅ Set up usage alerts and notifications
 
-2. **BYO-LLM Provider System**:
-   - Implement secure API key storage in Supabase
-   - Create model provider adapters (Claude, Gemini, Mistral, etc.)
-   - Build agent-level model selection
-   - Implement provider-specific rate limiting
+2. **BYO-LLM Provider System**: ✅
+   - ✅ Implemented secure API key storage in Supabase
+   - ✅ Created model provider adapters (Claude, Gemini, Mistral, etc.)
+   - ✅ Built agent-level model selection
+   - ✅ Implemented provider-specific rate limiting
 
-3. **Billing API Routes**:
-   - Create `/api/llm/stream` for unified LLM access
-   - Build `/api/usage` for credit tracking and reporting
-   - Implement `/api/plans` for subscription management
-   - Set up Stripe integration for add-on credit purchases
+3. **Billing API Routes**: ✅
+   - ✅ Created `/api/llm/stream` for unified LLM access with credit enforcement
+   - ✅ Built `/api/billing/usage` for credit tracking and reporting
+   - ✅ Implemented `/api/billing/subscription` endpoints for subscription management
+   - ✅ Set up Stripe integration for add-on credit purchases and subscription management
+   - ✅ Added `/api/billing/subscription/limits` for resource usage enforcement
 
-4. **Admin Dashboard**:
-   - Create organization usage overview
-   - Build per-agent model enforcement tools
-   - Implement quota management system
-   - Set up overage notification system
+4. **Admin Dashboard**: 🟡
+   - ✅ Created organization usage overview
+   - ✅ Built resource type enforcement for agents, workflows, batch jobs, etc.
+   - ✅ Implemented quota management system with plan-specific limits
+   - 🟡 Set up overage notification system (partial)
 
 #### Documentation & Configuration
 
@@ -374,7 +375,7 @@ The backend development is divided into three phases, each building upon the pre
 | 3 | Workflow Engine | 30% | In Progress |
 | 3 | File Storage | 0% | TBD |
 | 3 | Monitoring & Analytics | 15% | TBD |
-| 3 | LLM Billing System | 0% | TBD |
+| 3 | LLM Billing System | 90% | ✅ Mostly Complete |
 | 3 | Docs & Config | 0% | TBD |
 
 ## 📝 Notes
@@ -389,6 +390,11 @@ The backend development is divided into three phases, each building upon the pre
 - ✅ User settings and API key management implemented (June 7, 2025)
 - ✅ Enhanced agent memory system with context awareness (June 7, 2025)
 - ✅ Workflow execution API implemented (June 7, 2025)
+- ✅ LLM Billing System with Stripe integration implemented (June 7, 2025)
+- ✅ Subscription usage limits for Overseer-specific resource types (June 7, 2025)
+- ✅ Credit tracking and enforcement with plan-specific limits (June 7, 2025)
+- ✅ Batch processing system with credit pre-authorization (June 7, 2025)
+- ✅ Redis caching layer for LLM responses to reduce token usage (June 7, 2025)
 - Adapter interfaces exist but need completion
 - Focus on Supabase and Redis integration throughout implementation
 - Follow Airbnb Style Guide for code formatting

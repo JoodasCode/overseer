@@ -35,6 +35,14 @@ A comprehensive, production-ready AI agent management system that transforms bus
 - **Error Monitoring**: Real-time system error tracking
 - **Agent Health**: Monitor agent performance and diagnostic information
 
+### 💰 Subscription & Billing
+- **Tiered Plans**: Free, Pro, Teams, and Enterprise subscription options
+- **Usage-Based Billing**: Credit system for LLM token usage with plan-specific limits
+- **Resource Limits**: Enforced limits for agents, workflows, batch jobs, and integrations
+- **Stripe Integration**: Seamless payment processing and subscription management
+- **Add-on Credits**: Purchase additional credits as needed
+- **Usage Analytics**: Track credit consumption and resource utilization
+
 ---
 
 ## 🏗️ Architecture & Technology Stack
@@ -437,19 +445,29 @@ export async function GET(request: Request) {
 - **OpenAI API** - GPT-4 for agent responses
 - **Anthropic Claude** - Alternative AI provider
 - **Vercel AI SDK** - Unified AI interface
+- **BYO-LLM Support** - Bring your own LLM provider integration
+
+#### Billing & Subscription
+- **Stripe** - Payment processing and subscription management
+- **Credit System** - Token-based usage tracking and enforcement
+- **Usage Limits** - Resource-specific limits by subscription tier
+- **Redis Cache** - LLM response caching to reduce token usage
 
 #### Monitoring & Analytics
 - **Sentry** - Error tracking and performance monitoring
 - **Vercel Analytics** - Web vitals and performance
-- **PostHog** - Product analytics and feature flags
 
-#### Authentication
-- **NextAuth.js** - Flexible authentication
-- **Clerk** - Complete user management
-- **Auth0** - Enterprise authentication
+#### External Integrations
+- **GitHub**: Repository access and code analysis
+- **Slack**: Team communication and notifications
+- **Google Workspace**: Document and calendar integration
+- **Jira**: Task and project management
+- **Notion**: Knowledge base and documentation
+- **Stripe**: Subscription management and payment processing
+- **BYO-LLM Providers**: Support for Claude, Gemini, Mistral, and other LLM providers
 
 ### Environment Setup
-\`\`\`bash
+```bash
 # Install dependencies
 npm install
 
@@ -664,6 +682,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
+```
+
+---
+
+## 💰 LLM Billing System API Endpoints
+
+### Subscription Management
+```typescript
+// GET /api/billing/subscription/limits
+// Returns current usage and limits for all resource types
+
+// POST /api/billing/subscription/limits
+// Validates if a resource can be created based on subscription limits
+// Body: { resourceType: 'agents' | 'workflows' | 'batch_jobs' | 'plugin_integrations' | 'api_keys' | 'prompt_credits' }
+
+// GET /api/billing/subscription
+// Returns current subscription details
+
+// POST /api/billing/subscription/upgrade
+// Upgrades subscription to a new plan
+// Body: { planId: 'PRO' | 'TEAMS' | 'ENTERPRISE', quantity?: number }
+```
+
+### Credit Management
+```typescript
+// GET /api/billing/credits
+// Returns credit usage summary
+
+// POST /api/billing/credits/add
+// Purchases additional credits
+// Body: { amount: number, paymentMethodId: string }
+
+// GET /api/billing/usage
+// Returns detailed token usage analytics
+// Query: { startDate?: string, endDate?: string, modelName?: string }
+```
+
+### LLM Integration
+```typescript
+// POST /api/llm/stream
+// Streams LLM responses with credit enforcement
+// Body: { prompt: string, model?: string, provider?: string }
+
+// GET /api/llm/keys
+// Lists all BYO-LLM API keys for the user
+
+// POST /api/llm/keys
+// Adds a new BYO-LLM API key
+// Body: { provider: string, key: string, name: string }
+
+// DELETE /api/llm/keys/[keyId]
+// Removes a BYO-LLM API key
 ```
 
 ### Adding New Workflow Nodes
