@@ -12,14 +12,17 @@ datasource db {
 
 // User model extended from Supabase auth.users
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  display_name String?
-  avatar_url   String?
-  preferences  Json?    @default("{}") @db.JsonB
-  metadata     Json?    @default("{}") @db.JsonB
-  created_at   DateTime @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String   @unique
+  display_name    String?
+  avatar_url      String?
+  role            String   @default("user") // 'user', 'admin', 'developer'
+  api_keys        Json     @default("[]") @db.JsonB // Array of API keys
+  api_key_metadata Json     @default("[]") @db.JsonB // Metadata for API keys
+  preferences     Json?    @default("{}") @db.JsonB
+  metadata        Json?    @default("{}") @db.JsonB
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
 
   // Relations
   agents             Agent[]
