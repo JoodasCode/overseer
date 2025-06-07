@@ -566,6 +566,65 @@ Overseer includes a comprehensive webhook system for integrating with external s
    - Renewal of webhook subscriptions
    - Error handling and reporting
 
+### Knowledge Base System
+
+Overseer includes a powerful knowledge base system that enables users to upload, process, and search documents using semantic search capabilities. The system processes documents asynchronously and makes them available for semantic search.  
+
+#### Knowledge Base Components
+
+1. **Document Upload**
+   - Multipart file upload API
+   - Support for various document types (PDF, DOCX, TXT, etc.)
+   - Secure storage in Supabase Storage
+   - Metadata tracking and categorization
+
+2. **Document Processing**
+   - Asynchronous background processing
+   - Text extraction from various file formats
+   - Content chunking for large documents
+   - OpenAI embedding generation for semantic search
+
+3. **Semantic Search**
+   - Natural language query processing
+   - Vector similarity search using embeddings
+   - Keyword fallback search option
+   - Relevance scoring and ranking
+
+4. **Chat Integration**
+   - Knowledge context enhancement for agent responses
+   - Relevant document retrieval based on conversation context
+   - Seamless integration with the chat system
+
+### LLM Integration & Billing System
+
+Overseer includes a hybrid LLM architecture with usage-based billing that supports both default and custom LLM providers while tracking and managing usage credits.
+
+#### LLM Integration Components
+
+1. **Universal LLM Provider**
+   - Default OpenAI GPT-4.1 integration via Vercel AI SDK
+   - Streaming response handling for real-time chat
+   - Agent-level isolation for personalities and context
+   - Centralized prompt management system
+
+2. **Bring Your Own LLM (BYO-LLM)**
+   - Support for Claude, Gemini, Mistral, and other providers
+   - Secure API key storage in Supabase
+   - Per-agent model selection
+   - Provider-specific optimizations
+
+3. **Credit-based Billing**
+   - Token usage tracking for input and output
+   - Credit conversion based on model cost ratios
+   - Tiered plans with different credit allocations
+   - Add-on credit purchasing via Stripe
+
+4. **Admin Controls**
+   - Organization usage monitoring
+   - Per-agent model enforcement
+   - Quota management tools
+   - Usage analytics and reporting
+
 #### Adding a New Webhook Handler
 
 ```typescript

@@ -15,7 +15,7 @@ The backend development is divided into three phases, each building upon the pre
 | **🗄️ Database Schema** | Implement all core tables in Supabase:<br>• `agents`, `tasks`, `agent_memory`, `workflows`, `context_mappings`, `tools`, `users`, `error_logs`<br>Use Prisma for migration scripts | 🟡 In Progress |
 | **🧠 Core APIs** | Build API routes for:<br>• `/api/agents` (CRUD)<br>• `/api/tasks` (create, assign, update status)<br>• `/api/chat/[agentId]` (streamed AI responses)<br>• `/api/workflows` (save/load workflows)<br>• `/api/knowledge-base` (document storage) | ✅ Complete |
 | **🔐 Auth & Security** | Implement:<br>• JWT auth (NextAuth.js or Supabase Auth)<br>• API key support (for agents)<br>• Role-based access (admin, member, agent) | 🟡 In Progress |
-| **💬 AI Integration** | Setup:<br>• Vercel AI SDK or OpenAI SDK<br>• Streaming chat system (SSE or WebSocket fallback)<br>• Agent memory context (basic version) | 🔴 Not Started |
+| **💬 AI Integration** | Setup:<br>• Vercel AI SDK for OpenAI GPT-4.1 (default provider)<br>• Streaming chat system (SSE or WebSocket fallback)<br>• Agent memory context (basic version)<br>• Token usage tracking and credit system | 🔴 Not Started |
 
 ### Phase 1 Implementation Details
 
@@ -83,14 +83,22 @@ The backend development is divided into three phases, each building upon the pre
 #### AI Integration
 
 1. **AI Service**:
-   - Set up OpenAI or Anthropic client
+   - Set up Vercel AI SDK with OpenAI GPT-4.1 as default provider
    - Implement streaming response handling
    - Create prompt engineering system
+   - Build basic token usage tracking
 
 2. **Agent Context**:
    - Build context gathering for agents
    - Implement memory retrieval for context
    - Create tool calling capabilities
+   - Design agent-level isolation for personalities and context
+
+3. **Credit System Foundation**:
+   - Implement basic credit tracking per user
+   - Create token counting for input/output
+   - Set up usage limits for free tier
+   - Build credit deduction logic
 
 ---
 
@@ -100,7 +108,7 @@ The backend development is divided into three phases, each building upon the pre
 |------|------|--------|
 | **📦 Agent Memory** | • Build `agent_memory` system with persistence<br>• Context awareness for each agent<br>• Store: known terms, tools, fallback messages | 🟡 In Progress |
 | **🔌 Integrations** | • ✅ Implement Notion, Gmail, Slack, Trello, Asana adapters<br>• Add OAuth + token refresh logic<br>• ✅ Build webhook system (receivers, storage, subscriptions, refresh) | 🟢 Mostly Complete |
-| **🧠 Knowledge System** | • Add document upload support (PDF, txt)<br>• Parse content and store embeddings<br>• Enable knowledge-based retrieval for chat | 🟡 In Progress |
+| **🧠 Knowledge System** | • ✅ Add document upload support (PDF, txt, DOCX, etc.)<br>• ✅ Parse content and store embeddings<br>• ✅ Enable knowledge-based retrieval for chat | 🟢 Complete |
 | **⚡ Real-time Events** | • WebSocket server setup (or SSE)<br>• Trigger updates: new task, agent status, tool state<br>• Stream logs to dashboard | 🔴 Not Started |
 
 ### Phase 2 Implementation Details
@@ -144,14 +152,21 @@ The backend development is divided into three phases, each building upon the pre
 #### Knowledge System
 
 1. **Document Processing**:
-   - Implement file upload and storage
-   - Create text extraction for different formats
-   - Build chunking and embedding system
+   - ✅ Implemented file upload and Supabase Storage integration
+   - ✅ Created text extraction for various formats (PDF, DOCX, TXT, etc.)
+   - ✅ Built chunking and OpenAI embedding generation
+   - ✅ Implemented background job processing for asynchronous document handling
 
-2. **Knowledge Retrieval**:
-   - Implement semantic search
-   - Create relevance scoring
-   - Build knowledge integration with chat
+2. **Semantic Search**:
+   - ✅ Implemented vector search using pgvector extension
+   - ✅ Created keyword fallback search with full-text search
+   - ✅ Built relevance ranking and scoring system
+   - ✅ Added API endpoint for knowledge base search
+
+3. **Chat Integration**:
+   - ✅ Integrated knowledge retrieval with chat system
+   - ✅ Created context injection for agent prompts
+   - ✅ Built knowledge context provider for relevant information retrieval
 
 #### Real-time Features
 
@@ -173,7 +188,8 @@ The backend development is divided into three phases, each building upon the pre
 |------|------|--------|
 | **🎯 Workflow Engine** | • Visual node runner<br>• Trigger-condition-action system<br>• Node processor registry<br>• Schedule execution logic | 🟡 In Progress |
 | **📁 File Storage** | • Enable uploads via Supabase Storage or S3<br>• Connect file uploads to agents<br>• Link knowledge to files | 🔴 Not Started |
-| **📊 Monitoring & Analytics** | • Build `/api/monitoring` routes<br>• Track:<br>— Agent XP trends<br>— Task volume<br>— Error rate per tool<br>— Latency/response time | 🟡 Partial |
+| **📊 Monitoring & Analytics** | • Build `/api/monitoring` routes<br>• Track:<br>— Agent XP trends<br>— Task volume<br>— Error rate per tool<br>— Latency/response time<br>— Token usage and credit consumption | 🟡 Partial |
+| **💳 LLM Billing System** | • Implement credit-based usage tracking<br>• Build BYO-LLM provider system<br>• Create `/api/llm/stream`, `/api/usage` and `/api/plans` routes<br>• Integrate Stripe for add-on credit purchases<br>• Admin dashboard for Teams/Enterprise | 🔴 Not Started |
 | **📚 Docs & Config** | • Add `/api/docs` endpoint for dynamic agent docs<br>• Implement per-agent configuration panel | 🔴 Not Started |
 
 ### Phase 3 Implementation Details
@@ -218,6 +234,32 @@ The backend development is divided into three phases, each building upon the pre
    - Build analytics endpoints
    - Create visualization data formatters
    - Implement trend analysis
+
+#### LLM Billing System
+
+1. **Credit-based Usage Tracking**:
+   - Implement token counting for input/output
+   - Create credit conversion system based on model cost
+   - Build usage tracking and quota enforcement
+   - Set up usage alerts and notifications
+
+2. **BYO-LLM Provider System**:
+   - Implement secure API key storage in Supabase
+   - Create model provider adapters (Claude, Gemini, Mistral, etc.)
+   - Build agent-level model selection
+   - Implement provider-specific rate limiting
+
+3. **Billing API Routes**:
+   - Create `/api/llm/stream` for unified LLM access
+   - Build `/api/usage` for credit tracking and reporting
+   - Implement `/api/plans` for subscription management
+   - Set up Stripe integration for add-on credit purchases
+
+4. **Admin Dashboard**:
+   - Create organization usage overview
+   - Build per-agent model enforcement tools
+   - Implement quota management system
+   - Set up overage notification system
 
 #### Documentation & Configuration
 
@@ -327,11 +369,12 @@ The backend development is divided into three phases, each building upon the pre
 | 1 | AI Integration | 0% | TBD |
 | 2 | Agent Memory | 50% | In Progress |
 | 2 | Integrations | 20% | TBD |
-| 2 | Knowledge System | 40% | In Progress |
+| 2 | Knowledge System | 100% | ✅ Completed Jun 8, 2025 |
 | 2 | Real-time Events | 0% | TBD |
 | 3 | Workflow Engine | 30% | In Progress |
 | 3 | File Storage | 0% | TBD |
 | 3 | Monitoring & Analytics | 15% | TBD |
+| 3 | LLM Billing System | 0% | TBD |
 | 3 | Docs & Config | 0% | TBD |
 
 ## 📝 Notes
