@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase-client';
+import { prisma } from '@/lib/prisma';
 
 /**
  * GET /api/workflows/executions/[id]
@@ -11,54 +12,70 @@ export async function GET(
 ) {
   try {
     // Get user ID from auth context
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', details: authError?.message },
         { status: 401 }
       );
     }
 
     const executionId = params.id;
+    
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(executionId)) {
+      return NextResponse.json(
+        { error: 'Invalid execution ID format' },
+        { status: 400 }
+      );
+    }
 
-    // Query execution with workflow details
-    const { data: execution, error } = await supabase
-      .from('workflow_executions')
-      .select(`
-        *,
-        workflows (id, name, user_id)
-      `)
-      .eq('id', executionId)
-      .single();
-    
-    if (error) {
+    try {
+      // Query execution with workflow details using Prisma
+      const execution = await prisma.workflowExecution.findUnique({
+        where: {
+          id: executionId
+        },
+        include: {
+          workflow: {
+            select: {
+              id: true,
+              name: true,
+              user_id: true
+            }
+          }
+        }
+      });
+      
+      if (!execution) {
+        return NextResponse.json(
+          { error: 'Workflow execution not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Verify user owns the workflow
+      if (execution.workflow.user_id !== user.id) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 403 }
+        );
+      }
+      
+      return NextResponse.json({ execution });
+    } catch (dbError) {
+      console.error('Database error fetching workflow execution:', dbError);
       return NextResponse.json(
-        { error: error.message },
-        { status: error.code === '22P02' ? 400 : 500 }
+        { error: 'Failed to fetch workflow execution', details: (dbError as Error).message },
+        { status: 500 }
       );
     }
-    
-    if (!execution) {
-      return NextResponse.json(
-        { error: 'Workflow execution not found' },
-        { status: 404 }
-      );
-    }
-    
-    // Verify user owns the workflow
-    if ((execution.workflows as any).user_id !== user.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
-      );
-    }
-    
-    return NextResponse.json({ execution });
   } catch (error) {
     console.error('Error fetching workflow execution:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch workflow execution' },
+      { error: 'Failed to fetch workflow execution', details: (error as Error).message },
       { status: 500 }
     );
   }
@@ -74,63 +91,79 @@ export async function DELETE(
 ) {
   try {
     // Get user ID from auth context
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', details: authError?.message },
         { status: 401 }
       );
     }
 
     const executionId = params.id;
     
-    // First verify user owns the workflow
-    const { data: execution, error: fetchError } = await supabase
-      .from('workflow_executions')
-      .select(`
-        id,
-        workflows (id, user_id)
-      `)
-      .eq('id', executionId)
-      .single();
-    
-    if (fetchError || !execution) {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(executionId)) {
       return NextResponse.json(
-        { error: 'Workflow execution not found' },
-        { status: 404 }
+        { error: 'Invalid execution ID format' },
+        { status: 400 }
       );
     }
     
-    // Check ownership
-    if ((execution.workflows as any).user_id !== user.id) {
+    try {
+      // First verify user owns the workflow using Prisma
+      const execution = await prisma.workflowExecution.findUnique({
+        where: {
+          id: executionId
+        },
+        include: {
+          workflow: {
+            select: {
+              id: true,
+              user_id: true
+            }
+          }
+        }
+      });
+      
+      if (!execution) {
+        return NextResponse.json(
+          { error: 'Workflow execution not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Check ownership
+      if (execution.workflow.user_id !== user.id) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 403 }
+        );
+      }
+      
+      // Delete execution using Prisma
+      await prisma.workflowExecution.delete({
+        where: {
+          id: executionId
+        }
+      });
+      
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
+        { message: 'Workflow execution deleted successfully' },
+        { status: 200 }
       );
-    }
-    
-    // Delete execution
-    const { error } = await supabase
-      .from('workflow_executions')
-      .delete()
-      .eq('id', executionId);
-    
-    if (error) {
+    } catch (dbError) {
+      console.error('Database error deleting workflow execution:', dbError);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to delete workflow execution', details: (dbError as Error).message },
         { status: 500 }
       );
     }
-    
-    return NextResponse.json(
-      { message: 'Workflow execution deleted successfully' },
-      { status: 200 }
-    );
   } catch (error) {
     console.error('Error deleting workflow execution:', error);
     return NextResponse.json(
-      { error: 'Failed to delete workflow execution' },
+      { error: 'Failed to delete workflow execution', details: (error as Error).message },
       { status: 500 }
     );
   }

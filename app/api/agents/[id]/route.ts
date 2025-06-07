@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase-client';
+
+interface AgentUpdateRequest {
+  name?: string;
+  description?: string;
+  avatar_url?: string;
+  tools?: Record<string, any>;
+  preferences?: Record<string, any>;
+  metadata?: Record<string, any>;
+}
 
 /**
  * GET /api/agents/[id]
@@ -11,47 +21,57 @@ export async function GET(
 ) {
   try {
     // Get user ID from auth context
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', details: authError?.message },
         { status: 401 }
       );
     }
 
     const agentId = params.id;
 
-    // Query agent with memory
-    const { data: agent, error } = await supabase
-      .from('agents')
-      .select(`
-        *,
-        agent_memory (*)
-      `)
-      .eq('id', agentId)
-      .eq('user_id', user.id)
-      .single();
-    
-    if (error) {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(agentId)) {
       return NextResponse.json(
-        { error: error.message },
-        { status: error.code === '22P02' ? 400 : 500 }
+        { error: 'Invalid agent ID format' },
+        { status: 400 }
       );
     }
-    
-    if (!agent) {
+
+    // Query agent with memory using Prisma for better type safety
+    try {
+      const agent = await prisma.agent.findUnique({
+        where: {
+          id: agentId,
+          user_id: user.id,
+        },
+        include: {
+          agentMemory: true,
+        },
+      });
+      
+      if (!agent) {
+        return NextResponse.json(
+          { error: 'Agent not found' },
+          { status: 404 }
+        );
+      }
+      
+      return NextResponse.json({ agent });
+    } catch (dbError) {
+      console.error('Database error fetching agent:', dbError);
       return NextResponse.json(
-        { error: 'Agent not found' },
-        { status: 404 }
+        { error: 'Failed to fetch agent', details: (dbError as Error).message },
+        { status: 500 }
       );
     }
-    
-    return NextResponse.json({ agent });
   } catch (error) {
     console.error('Error fetching agent:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch agent' },
+      { error: 'Failed to fetch agent', details: (error as Error).message },
       { status: 500 }
     );
   }
@@ -67,58 +87,78 @@ export async function PATCH(
 ) {
   try {
     // Get user ID from auth context
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', details: authError?.message },
         { status: 401 }
       );
     }
 
     const agentId = params.id;
     
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(agentId)) {
+      return NextResponse.json(
+        { error: 'Invalid agent ID format' },
+        { status: 400 }
+      );
+    }
+    
     // Parse request body
-    const body = await req.json();
-    const { name, role, avatar, persona, tools, status } = body;
+    const body = await req.json() as AgentUpdateRequest;
     
     // Build update object with only provided fields
     const updateData: Record<string, any> = {};
-    if (name !== undefined) updateData.name = name;
-    if (role !== undefined) updateData.role = role;
-    if (avatar !== undefined) updateData.avatar = avatar;
-    if (persona !== undefined) updateData.persona = persona;
-    if (tools !== undefined) updateData.tools = tools;
-    if (status !== undefined) updateData.status = status;
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.avatar_url !== undefined) updateData.avatar_url = body.avatar_url;
+    if (body.tools !== undefined) updateData.tools = body.tools;
+    if (body.preferences !== undefined) updateData.preferences = body.preferences;
+    if (body.metadata !== undefined) updateData.metadata = body.metadata;
     
-    // Update agent
-    const { data: agent, error } = await supabase
-      .from('agents')
-      .update(updateData)
-      .eq('id', agentId)
-      .eq('user_id', user.id)
-      .select()
-      .single();
-    
-    if (error) {
+    // Update agent using Prisma
+    try {
+      // First check if agent exists and belongs to user
+      const existingAgent = await prisma.agent.findFirst({
+        where: {
+          id: agentId,
+          user_id: user.id,
+        },
+      });
+      
+      if (!existingAgent) {
+        return NextResponse.json(
+          { error: 'Agent not found or you do not have permission to update it' },
+          { status: 404 }
+        );
+      }
+      
+      // Update the agent
+      const updatedAgent = await prisma.agent.update({
+        where: {
+          id: agentId,
+        },
+        data: updateData,
+        include: {
+          agentMemory: true,
+        },
+      });
+      
+      return NextResponse.json({ agent: updatedAgent });
+    } catch (dbError) {
+      console.error('Database error updating agent:', dbError);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to update agent', details: (dbError as Error).message },
         { status: 500 }
       );
     }
-    
-    if (!agent) {
-      return NextResponse.json(
-        { error: 'Agent not found' },
-        { status: 404 }
-      );
-    }
-    
-    return NextResponse.json({ agent });
   } catch (error) {
     console.error('Error updating agent:', error);
     return NextResponse.json(
-      { error: 'Failed to update agent' },
+      { error: 'Failed to update agent', details: (error as Error).message },
       { status: 500 }
     );
   }
@@ -134,39 +174,64 @@ export async function DELETE(
 ) {
   try {
     // Get user ID from auth context
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', details: authError?.message },
         { status: 401 }
       );
     }
 
     const agentId = params.id;
     
-    // Delete agent (agent_memory will be cascade deleted)
-    const { error } = await supabase
-      .from('agents')
-      .delete()
-      .eq('id', agentId)
-      .eq('user_id', user.id);
-    
-    if (error) {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(agentId)) {
       return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
+        { error: 'Invalid agent ID format' },
+        { status: 400 }
       );
     }
     
-    return NextResponse.json(
-      { message: 'Agent deleted successfully' },
-      { status: 200 }
-    );
+    try {
+      // First check if agent exists and belongs to user
+      const existingAgent = await prisma.agent.findFirst({
+        where: {
+          id: agentId,
+          user_id: user.id,
+        },
+      });
+      
+      if (!existingAgent) {
+        return NextResponse.json(
+          { error: 'Agent not found or you do not have permission to delete it' },
+          { status: 404 }
+        );
+      }
+      
+      // Delete agent (agent_memory will be cascade deleted due to schema relation)
+      await prisma.agent.delete({
+        where: {
+          id: agentId,
+        },
+      });
+      
+      return NextResponse.json(
+        { message: 'Agent deleted successfully' },
+        { status: 200 }
+      );
+    } catch (dbError) {
+      console.error('Database error deleting agent:', dbError);
+      return NextResponse.json(
+        { error: 'Failed to delete agent', details: (dbError as Error).message },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error('Error deleting agent:', error);
     return NextResponse.json(
-      { error: 'Failed to delete agent' },
+      { error: 'Failed to delete agent', details: (error as Error).message },
       { status: 500 }
     );
   }

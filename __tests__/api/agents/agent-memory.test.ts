@@ -1,49 +1,112 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { GET, PATCH, POST } from '@/app/api/agents/[id]/memory/route';
+
+// Create mock functions using vi.hoisted to ensure they're defined before mocks are hoisted
+const mockGetUser = vi.hoisted(() => vi.fn());
+const mockFindUnique = vi.hoisted(() => vi.fn());
+const mockFindMany = vi.hoisted(() => vi.fn());
+const mockFindFirst = vi.hoisted(() => vi.fn());
+const mockUpdate = vi.hoisted(() => vi.fn());
+const mockCreate = vi.hoisted(() => vi.fn());
+const mockMemoryLogFindMany = vi.hoisted(() => vi.fn());
+const mockMemoryLogCreate = vi.hoisted(() => vi.fn());
 
 // Mock Supabase client
-vi.mock('@/lib/supabase-client', () => {
-  const mockSelect = vi.fn().mockReturnThis();
-  const mockEq = vi.fn().mockReturnThis();
-  const mockUpdate = vi.fn().mockReturnThis();
-  const mockInsert = vi.fn().mockReturnThis();
-  const mockOrder = vi.fn().mockReturnThis();
-  const mockLimit = vi.fn().mockReturnThis();
-  const mockSingle = vi.fn().mockReturnThis();
-  
-  return {
-    supabase: {
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: {
-            user: { id: 'test-user-id' }
-          }
-        })
-      },
-      from: vi.fn().mockImplementation(() => ({
-        select: mockSelect,
-        eq: mockEq,
-        update: mockUpdate,
-        insert: mockInsert,
-        order: mockOrder,
-        limit: mockLimit,
-        single: mockSingle
-      }))
-    }
-  };
-});
+vi.mock('@/lib/supabase-client', () => ({
+  supabase: {
+    auth: {
+      getUser: mockGetUser,
+    },
+  },
+}));
+
+// Mock Prisma client
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    agent: {
+      findUnique: mockFindUnique,
+    },
+    agentMemory: {
+      findMany: mockFindMany,
+      findFirst: mockFindFirst,
+      findUnique: mockFindUnique,
+      update: mockUpdate,
+      create: mockCreate,
+    },
+    memoryLog: {
+      findMany: mockMemoryLogFindMany,
+      create: mockMemoryLogCreate,
+    },
+  },
+}));
+
+// Import the route after mocking
+import { GET, PATCH, POST } from '@/app/api/agents/[id]/memory/route';
 
 describe('Agent Memory API', () => {
   let mockRequest: NextRequest;
-  const mockParams = { id: 'test-agent-id' };
+  const mockParams = { id: '123e4567-e89b-12d3-a456-426614174000' };
+  
+  // Define mock data that can be used across tests
+  const mockAgent = {
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    name: 'Test Agent',
+    description: 'Test description',
+    user_id: 'test-user-id',
+  };
+  
+  const mockMemory = [
+    {
+      id: 'memory-id-1',
+      agent_id: '123e4567-e89b-12d3-a456-426614174000',
+      key: 'weekly_goals',
+      value: 'Test goals',
+      type: 'string',
+      metadata: {}
+    },
+    {
+      id: 'memory-id-2',
+      agent_id: '123e4567-e89b-12d3-a456-426614174000',
+      key: 'preferences',
+      value: JSON.stringify(['Test preference']),
+      type: 'json',
+      metadata: {}
+    },
+    {
+      id: 'memory-id-3',
+      agent_id: '123e4567-e89b-12d3-a456-426614174000',
+      key: 'recent_learnings',
+      value: JSON.stringify(['Test learning']),
+      type: 'json',
+      metadata: {}
+    }
+  ];
+  
+  const mockLogs = [
+    {
+      id: 'log-1',
+      agent_id: '123e4567-e89b-12d3-a456-426614174000',
+      operation: 'learning',
+      key: 'recent_learnings',
+      new_value: 'Test learning',
+      old_value: null,
+      metadata: {},
+      created_at: new Date().toISOString()
+    }
+  ];
   
   beforeEach(() => {
     // Reset mocks
     vi.resetAllMocks();
     
     // Create mock request
-    mockRequest = new NextRequest('http://localhost:3000/api/agents/test-agent-id/memory');
+    mockRequest = new NextRequest(`http://localhost:3000/api/agents/${mockParams.id}/memory`);
+    
+    // Mock authenticated user
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'test-user-id' } },
+      error: null
+    });
   });
   
   afterEach(() => {
@@ -52,81 +115,10 @@ describe('Agent Memory API', () => {
   
   describe('GET /api/agents/[id]/memory', () => {
     it('should return agent memory and recent memory logs', async () => {
-      // Mock Supabase responses
-      const mockMemory = {
-        id: 'memory-id',
-        agent_id: 'test-agent-id',
-        weekly_goals: 'Test goals',
-        preferences: ['Test preference'],
-        recent_learnings: ['Test learning']
-      };
-      
-      const mockMemoryLogs = [
-        {
-          id: 'log-1',
-          agent_id: 'test-agent-id',
-          type: 'learning',
-          content: 'Test learning',
-          created_at: new Date().toISOString()
-        }
-      ];
-      
-      // Mock agent verification
-      const mockAgent = {
-        id: 'test-agent-id',
-        name: 'Test Agent',
-        user_id: 'test-user-id'
-      };
-      
-      const { supabase } = await import('@/lib/supabase-client');
-      
-      // Setup mock implementation for different tables
-      supabase.from = vi.fn().mockImplementation((table) => {
-        if (table === 'agents') {
-          return {
-            select: () => ({
-              eq: () => ({
-                eq: () => ({
-                  single: () => Promise.resolve({
-                    data: mockAgent,
-                    error: null
-                  })
-                })
-              })
-            })
-          };
-        } else if (table === 'agent_memory') {
-          return {
-            select: () => ({
-              eq: () => ({
-                single: () => Promise.resolve({
-                  data: mockMemory,
-                  error: null
-                })
-              })
-            })
-          };
-        } else if (table === 'memory_logs') {
-          return {
-            select: () => ({
-              eq: () => ({
-                order: () => ({
-                  limit: () => Promise.resolve({
-                    data: mockMemoryLogs,
-                    error: null
-                  })
-                })
-              })
-            })
-          };
-        }
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis()
-        };
-      });
+      // Mock Prisma responses
+      mockFindUnique.mockResolvedValue(mockAgent);
+      mockFindMany.mockResolvedValue(mockMemory);
+      mockMemoryLogFindMany.mockResolvedValue(mockLogs);
       
       // Call the API handler
       const response = await GET(mockRequest, { params: mockParams });
@@ -136,19 +128,38 @@ describe('Agent Memory API', () => {
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(200);
       expect(responseData).toHaveProperty('memory');
-      expect(responseData).toHaveProperty('memory_logs');
+      expect(responseData).toHaveProperty('logs');
       expect(responseData.memory).toEqual(mockMemory);
-      expect(responseData.memory_logs).toEqual(mockMemoryLogs);
+      expect(responseData.logs).toEqual(mockLogs);
+      
+      // Verify Prisma calls
+      expect(mockFindUnique).toHaveBeenCalledWith({
+        where: {
+          id: mockParams.id,
+          user_id: 'test-user-id'
+        }
+      });
+      
+      expect(mockFindMany).toHaveBeenCalledWith({
+        where: {
+          agent_id: mockParams.id
+        }
+      });
+      
+      expect(mockMemoryLogFindMany).toHaveBeenCalledWith({
+        where: {
+          agent_id: mockParams.id
+        },
+        orderBy: {
+          created_at: 'desc'
+        },
+        take: 20
+      });
     });
     
     it('should return 404 if agent is not found', async () => {
-      const { supabase } = await import('@/lib/supabase-client');
-      
       // Mock agent not found
-      supabase.from().select().eq().eq().single = vi.fn().mockResolvedValue({
-        data: null,
-        error: { message: 'Agent not found' }
-      });
+      mockFindUnique.mockResolvedValue(null);
       
       // Call the API handler
       const response = await GET(mockRequest, { params: mockParams });
@@ -157,75 +168,62 @@ describe('Agent Memory API', () => {
       // Verify response
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(404);
-      expect(responseData).toEqual({ error: 'Agent not found' });
+      expect(responseData).toEqual({ error: 'Agent not found or you do not have permission to access it' });
+      
+      // Verify Prisma calls
+      expect(mockFindUnique).toHaveBeenCalledWith({
+        where: {
+          id: mockParams.id,
+          user_id: 'test-user-id'
+        }
+      });
     });
   });
   
   describe('PATCH /api/agents/[id]/memory', () => {
-    it('should update agent memory fields', async () => {
+    it('should update agent memory', async () => {
       // Mock request body
       const requestBody = {
-        weekly_goals: 'Updated goals',
-        preferences: ['Updated preference']
+        key: 'weekly_goals',
+        value: 'Updated goals',
+        type: 'string',
+        metadata: {}
       };
       
-      // Mock JSON parsing
-      mockRequest.json = vi.fn().mockResolvedValue(requestBody);
-      
-      // Mock Supabase responses
-      const mockUpdatedMemory = {
-        id: 'memory-id',
-        agent_id: 'test-agent-id',
-        weekly_goals: 'Updated goals',
-        preferences: ['Updated preference'],
-        recent_learnings: ['Test learning']
-      };
-      
-      // Mock agent verification
-      const mockAgent = {
-        id: 'test-agent-id',
-        name: 'Test Agent',
-        user_id: 'test-user-id'
-      };
-      
-      const { supabase } = await import('@/lib/supabase-client');
-      
-      // Setup mock implementation for different tables
-      supabase.from = vi.fn().mockImplementation((table) => {
-        if (table === 'agents') {
-          return {
-            select: () => ({
-              eq: () => ({
-                eq: () => ({
-                  single: () => Promise.resolve({
-                    data: mockAgent,
-                    error: null
-                  })
-                })
-              })
-            })
-          };
-        } else if (table === 'agent_memory') {
-          return {
-            update: () => ({
-              eq: () => ({
-                select: () => ({
-                  single: () => Promise.resolve({
-                    data: mockUpdatedMemory,
-                    error: null
-                  })
-                })
-              })
-            })
-          };
+      // Set request body
+      mockRequest = new NextRequest(
+        `http://localhost:3000/api/agents/${mockParams.id}/memory`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(requestBody)
         }
-        return {
-          select: vi.fn().mockReturnThis(),
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockReturnThis()
-        };
+      );
+      
+      // Mock agent and memory responses
+      mockFindUnique.mockImplementation((args) => {
+        if (args?.where?.agent_id_key) {
+          return Promise.resolve({
+            id: 'memory-id-1',
+            agent_id: mockParams.id,
+            key: 'weekly_goals',
+            value: 'Test goals',
+            type: 'string',
+            metadata: {}
+          });
+        }
+        return Promise.resolve(mockAgent);
       });
+      
+      const mockUpdatedMemory = {
+        id: 'memory-id-1',
+        agent_id: mockParams.id,
+        key: 'weekly_goals',
+        value: 'Updated goals',
+        type: 'string',
+        metadata: {}
+      };
+      
+      mockUpdate.mockResolvedValue(mockUpdatedMemory);
       
       // Call the API handler
       const response = await PATCH(mockRequest, { params: mockParams });
@@ -236,6 +234,37 @@ describe('Agent Memory API', () => {
       expect(response.status).toBe(200);
       expect(responseData).toHaveProperty('memory');
       expect(responseData.memory).toEqual(mockUpdatedMemory);
+      
+      // Verify Prisma calls
+      expect(mockFindUnique).toHaveBeenCalledWith({
+        where: {
+          id: mockParams.id,
+          user_id: 'test-user-id'
+        }
+      });
+      
+      expect(mockFindUnique).toHaveBeenCalledWith({
+        where: {
+          agent_id_key: {
+            agent_id: mockParams.id,
+            key: requestBody.key
+          }
+        }
+      });
+      
+      expect(mockUpdate).toHaveBeenCalledWith({
+        where: {
+          agent_id_key: {
+            agent_id: mockParams.id,
+            key: requestBody.key
+          }
+        },
+        data: {
+          value: requestBody.value,
+          type: requestBody.type,
+          metadata: requestBody.metadata
+        }
+      });
     });
   });
   
@@ -243,91 +272,58 @@ describe('Agent Memory API', () => {
     it('should add a new memory log entry', async () => {
       // Mock request body
       const requestBody = {
-        type: 'learning',
-        content: 'New learning'
-      };
-      
-      // Mock JSON parsing
-      mockRequest.json = vi.fn().mockResolvedValue(requestBody);
-      
-      // Mock Supabase responses
-      const mockMemoryLog = {
-        id: 'new-log-id',
-        agent_id: 'test-agent-id',
-        type: 'learning',
-        content: 'New learning',
+        operation: 'learning',
+        key: 'recent_learnings',
+        new_value: 'New learning',
         created_at: new Date().toISOString()
       };
       
-      // Mock agent verification
-      const mockAgent = {
-        id: 'test-agent-id',
-        name: 'Test Agent',
-        user_id: 'test-user-id'
-      };
-      
-      // Mock memory for updating recent learnings
-      const mockMemory = {
-        id: 'memory-id',
-        agent_id: 'test-agent-id',
-        weekly_goals: 'Test goals',
-        preferences: ['Test preference'],
-        recent_learnings: ['Existing learning']
-      };
-      
-      const { supabase } = await import('@/lib/supabase-client');
-      
-      // Setup mock implementation for different tables
-      supabase.from = vi.fn().mockImplementation((table) => {
-        if (table === 'agents') {
-          return {
-            select: () => ({
-              eq: () => ({
-                eq: () => ({
-                  single: () => Promise.resolve({
-                    data: mockAgent,
-                    error: null
-                  })
-                })
-              })
-            })
-          };
-        } else if (table === 'memory_logs') {
-          return {
-            insert: () => ({
-              select: () => ({
-                single: () => Promise.resolve({
-                  data: mockMemoryLog,
-                  error: null
-                })
-              })
-            })
-          };
-        } else if (table === 'agent_memory') {
-          return {
-            select: () => ({
-              eq: () => ({
-                single: () => Promise.resolve({
-                  data: mockMemory,
-                  error: null
-                })
-              })
-            }),
-            update: () => ({
-              eq: () => Promise.resolve({
-                error: null
-              })
-            })
-          };
+      // Set request body
+      mockRequest = new NextRequest(
+        `http://localhost:3000/api/agents/${mockParams.id}/memory`,
+        {
+          method: 'POST',
+          body: JSON.stringify(requestBody)
         }
-        return {
-          select: vi.fn().mockReturnThis(),
-          insert: vi.fn().mockReturnThis(),
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockReturnThis()
-        };
-      });
+      );
+      
+      // Mock memory log creation response
+      const mockMemoryLog = {
+        id: 'log-id',
+        agent_id: mockParams.id,
+        operation: 'learning',
+        key: 'recent_learnings',
+        new_value: 'New learning',
+        old_value: null,
+        metadata: {},
+        created_at: new Date().toISOString()
+      };
+      
+      // Mock existing memory for recent learnings
+      const mockExistingMemory = {
+        id: 'memory-id-3',
+        agent_id: mockParams.id,
+        key: 'recent_learnings',
+        value: JSON.stringify(['Existing learning']),
+        type: 'json',
+        metadata: {}
+      };
+      
+      // Mock updated memory
+      const mockUpdatedMemory = {
+        id: 'memory-id-3',
+        agent_id: mockParams.id,
+        key: 'recent_learnings',
+        value: JSON.stringify(['New learning', 'Existing learning']),
+        type: 'json',
+        metadata: {}
+      };
+      
+      // Mock Prisma responses
+      mockFindUnique.mockResolvedValue(mockAgent);
+      mockMemoryLogCreate.mockResolvedValue(mockMemoryLog);
+      mockFindFirst.mockResolvedValue(mockExistingMemory);
+      mockUpdate.mockResolvedValue(mockUpdatedMemory);
       
       // Call the API handler
       const response = await POST(mockRequest, { params: mockParams });
@@ -336,34 +332,63 @@ describe('Agent Memory API', () => {
       // Verify response
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(201);
-      expect(responseData).toHaveProperty('memory_log');
-      expect(responseData.memory_log).toEqual(mockMemoryLog);
+      expect(responseData).toHaveProperty('log');
+      expect(responseData.log).toEqual(mockMemoryLog);
+      
+      // Verify Prisma calls
+      expect(mockFindUnique).toHaveBeenCalledWith({
+        where: {
+          id: mockParams.id,
+          user_id: 'test-user-id'
+        }
+      });
+      
+      expect(mockMemoryLogCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          agent_id: mockParams.id,
+          operation: requestBody.operation,
+          key: requestBody.key,
+          new_value: requestBody.new_value,
+          metadata: {}
+        })
+      });
+      
+      expect(mockFindFirst).toHaveBeenCalledWith({
+        where: {
+          agent_id: mockParams.id,
+          key: 'recent_learnings'
+        }
+      });
+      
+      expect(mockUpdate).toHaveBeenCalledWith({
+        where: {
+          id: mockExistingMemory.id
+        },
+        data: {
+          value: expect.any(String)
+        }
+      });
     });
     
     it('should return 400 if required fields are missing', async () => {
       // Mock request with missing fields
-      const requestBody = {
-        // Missing type
-        content: 'New learning'
+      const invalidRequestBody = {
+        // Missing operation
+        key: 'recent_learnings',
+        new_value: 'New learning'
       };
       
-      // Mock JSON parsing
-      mockRequest.json = vi.fn().mockResolvedValue(requestBody);
+      // Set request body
+      mockRequest = new NextRequest(
+        `http://localhost:3000/api/agents/${mockParams.id}/memory`,
+        {
+          method: 'POST',
+          body: JSON.stringify(invalidRequestBody)
+        }
+      );
       
-      // Mock agent verification
-      const mockAgent = {
-        id: 'test-agent-id',
-        name: 'Test Agent',
-        user_id: 'test-user-id'
-      };
-      
-      const { supabase } = await import('@/lib/supabase-client');
-      
-      // Setup mock for agent verification
-      supabase.from().select().eq().eq().single = vi.fn().mockResolvedValue({
-        data: mockAgent,
-        error: null
-      });
+      // Mock Prisma responses
+      mockFindUnique.mockResolvedValue(mockAgent);
       
       // Call the API handler
       const response = await POST(mockRequest, { params: mockParams });
@@ -372,7 +397,7 @@ describe('Agent Memory API', () => {
       // Verify response
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(400);
-      expect(responseData).toEqual({ error: 'Missing required fields' });
+      expect(responseData).toEqual({ error: 'Missing required fields: operation, key, new_value' });
     });
   });
 });

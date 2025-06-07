@@ -3,78 +3,67 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Create mock functions using vi.hoisted to ensure they're defined before mocks are hoisted
 const mockGetUser = vi.hoisted(() => vi.fn());
-const mockCount = vi.hoisted(() => vi.fn());
 const mockFindMany = vi.hoisted(() => vi.fn());
-const mockAgentCreate = vi.hoisted(() => vi.fn());
-const mockMemoryCreate = vi.hoisted(() => vi.fn());
+const mockCreate = vi.hoisted(() => vi.fn());
 
-// Mock Supabase client
+// Setup mocks before importing any modules
 vi.mock('@/lib/supabase-client', () => ({
   supabase: {
     auth: {
-      getUser: mockGetUser,
-    },
-  },
+      getUser: mockGetUser
+    }
+  }
 }));
 
-// Mock Prisma client
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    agent: {
-      count: mockCount,
+    workflow: {
       findMany: mockFindMany,
-      create: mockAgentCreate,
-    },
-    agentMemory: {
-      create: mockMemoryCreate,
-    },
-  },
+      create: mockCreate
+    }
+  }
 }));
 
 // Import the route after mocking
-import { GET, POST } from '@/app/api/agents/route';
+import { GET, POST } from '@/app/api/workflows/route';
 
-describe('Agents API', () => {
+describe('Workflows API Routes', () => {
   let mockRequest: NextRequest;
   
   beforeEach(() => {
-    // Reset mocks
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     
-    // Create mock request
-    mockRequest = new NextRequest('http://localhost:3000/api/agents');
-    
-    // Mock authenticated user
+    // Setup default mock implementations
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'test-user-id' } },
-      error: null,
+      error: null
     });
+    
+    // Create mock request
+    mockRequest = new NextRequest('http://localhost:3000/api/workflows');
   });
   
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.resetAllMocks();
   });
   
-  describe('GET /api/agents', () => {
-    it('should return all agents for authenticated user', async () => {
+  describe('GET /api/workflows', () => {
+    it('should return all workflows for authenticated user', async () => {
       // Mock Prisma responses
-      const mockAgents = [
+      const mockWorkflows = [
         {
           id: '123e4567-e89b-12d3-a456-426614174000',
-          name: 'Test Agent',
+          name: 'Test Workflow',
           description: 'Test description',
-          avatar_url: 'https://example.com/avatar.png',
-          tools: {},
-          preferences: {},
-          metadata: {},
+          config: { nodes: [{ id: 'node1', type: 'trigger' }] },
+          status: 'draft',
           user_id: 'test-user-id',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
       ];
       
-      mockCount.mockResolvedValue(1);
-      mockFindMany.mockResolvedValue(mockAgents);
+      mockFindMany.mockResolvedValue(mockWorkflows);
       
       // Call the API handler
       const response = await GET(mockRequest);
@@ -83,37 +72,67 @@ describe('Agents API', () => {
       // Verify response
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(200);
-      expect(responseData).toHaveProperty('agents');
-      expect(responseData.agents).toEqual(mockAgents);
-      expect(responseData).toHaveProperty('pagination');
+      expect(responseData).toHaveProperty('workflows');
+      expect(responseData.workflows).toEqual(mockWorkflows);
       
       // Verify Prisma calls
-      expect(mockCount).toHaveBeenCalledWith({
-        where: {
-          user_id: 'test-user-id'
-        }
-      });
-      
       expect(mockFindMany).toHaveBeenCalledWith({
         where: {
           user_id: 'test-user-id'
         },
         orderBy: {
-          created_at: 'desc'
+          updated_at: 'desc'
+        }
+      });
+    });
+    
+    it('should filter workflows by status', async () => {
+      // Create request with status filter
+      mockRequest = new NextRequest('http://localhost:3000/api/workflows?status=active');
+      
+      // Mock Prisma responses
+      const mockWorkflows = [
+        {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          name: 'Active Workflow',
+          description: 'Test description',
+          config: { nodes: [{ id: 'node1', type: 'trigger' }] },
+          status: 'active',
+          user_id: 'test-user-id',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+      
+      mockFindMany.mockResolvedValue(mockWorkflows);
+      
+      // Call the API handler
+      const response = await GET(mockRequest);
+      const responseData = await response.json();
+      
+      // Verify response
+      expect(response).toBeInstanceOf(NextResponse);
+      expect(response.status).toBe(200);
+      expect(responseData).toHaveProperty('workflows');
+      expect(responseData.workflows).toEqual(mockWorkflows);
+      
+      // Verify Prisma calls with status filter
+      expect(mockFindMany).toHaveBeenCalledWith({
+        where: {
+          user_id: 'test-user-id',
+          status: 'active'
         },
-        skip: 0,
-        take: 50,
-        include: {
-          agentMemory: false
+        orderBy: {
+          updated_at: 'desc'
         }
       });
     });
     
     it('should return 401 if user is not authenticated', async () => {
       // Mock unauthenticated user
-      mockGetUser.mockResolvedValue({
+      mockGetUser.mockResolvedValueOnce({
         data: { user: null },
-        error: null
+        error: { message: 'Not authenticated' }
       });
       
       // Call the API handler
@@ -128,7 +147,7 @@ describe('Agents API', () => {
     
     it('should return 500 if database operation fails', async () => {
       // Mock Prisma error
-      mockCount.mockRejectedValue(new Error('Database error'));
+      mockFindMany.mockRejectedValue(new Error('Database error'));
       
       // Call the API handler
       const response = await GET(mockRequest);
@@ -137,57 +156,46 @@ describe('Agents API', () => {
       // Verify response
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(500);
-      expect(responseData).toHaveProperty('error', 'Failed to fetch agents');
+      expect(responseData).toHaveProperty('error', 'Failed to fetch workflows');
       expect(responseData).toHaveProperty('details', 'Database error');
     });
   });
   
-  describe('POST /api/agents', () => {
-    it('should create a new agent with initial memory', async () => {
+  describe('POST /api/workflows', () => {
+    it('should create a new workflow', async () => {
       // Mock request body
       const requestBody = {
-        name: 'New Agent',
+        name: 'New Workflow',
         description: 'Test description',
-        avatar_url: 'https://example.com/avatar.png',
-        tools: { 'web-search': true, 'calculator': true },
-        preferences: { 'response_style': 'concise' },
-        metadata: { 'persona': 'helpful assistant' }
+        nodes: [
+          { id: 'node1', type: 'trigger', position: { x: 100, y: 100 } },
+          { id: 'node2', type: 'action', position: { x: 300, y: 100 } }
+        ],
+        status: 'draft'
       };
       
       // Set request body
       mockRequest = new NextRequest(
-        'http://localhost:3000/api/agents',
+        'http://localhost:3000/api/workflows',
         {
           method: 'POST',
           body: JSON.stringify(requestBody)
         }
       );
       
-      // Mock agent creation response
-      const mockAgent = {
+      // Mock created workflow
+      const mockCreatedWorkflow = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        ...requestBody,
+        name: requestBody.name,
+        description: requestBody.description,
+        config: { nodes: requestBody.nodes },
+        status: requestBody.status,
         user_id: 'test-user-id',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
       
-      // Mock memory creation response
-      const mockMemory = {
-        id: '223e4567-e89b-12d3-a456-426614174001',
-        agent_id: mockAgent.id,
-        key: 'system_prompt',
-        value: 'I am a helpful AI assistant.',
-        type: 'string',
-        metadata: {
-          importance: 10,
-          category: 'system',
-          goals: ['Learn about my user and be helpful']
-        }
-      };
-      
-      mockAgentCreate.mockResolvedValue(mockAgent);
-      mockMemoryCreate.mockResolvedValue(mockMemory);
+      mockCreate.mockResolvedValue(mockCreatedWorkflow);
       
       // Call the API handler
       const response = await POST(mockRequest);
@@ -196,33 +204,20 @@ describe('Agents API', () => {
       // Verify response
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(201);
-      expect(responseData).toHaveProperty('agent');
-      expect(responseData.agent).toEqual(mockAgent);
+      expect(responseData).toHaveProperty('workflow');
+      expect(responseData.workflow).toEqual(mockCreatedWorkflow);
       
       // Verify Prisma calls
-      expect(mockAgentCreate).toHaveBeenCalledWith({
+      expect(mockCreate).toHaveBeenCalledWith({
         data: {
-          user_id: 'test-user-id',
           name: requestBody.name,
           description: requestBody.description,
-          avatar_url: requestBody.avatar_url,
-          tools: requestBody.tools,
-          preferences: requestBody.preferences,
-          metadata: requestBody.metadata,
-        },
-      });
-      
-      expect(mockMemoryCreate).toHaveBeenCalledWith({
-        data: {
-          agent_id: mockAgent.id,
-          key: 'system_prompt',
-          value: 'I am a helpful AI assistant.',
-          type: 'string',
-          metadata: expect.objectContaining({
-            importance: 10,
-            category: 'system'
-          }),
-        },
+          config: { nodes: requestBody.nodes },
+          status: requestBody.status,
+          user_id: 'test-user-id',
+          created_at: expect.any(Date),
+          updated_at: expect.any(Date)
+        }
       });
     });
     
@@ -230,12 +225,13 @@ describe('Agents API', () => {
       // Mock request with missing fields
       const requestBody = {
         // Missing name
-        description: 'Test description'
+        description: 'Test description',
+        nodes: []
       };
       
       // Set request body
       mockRequest = new NextRequest(
-        'http://localhost:3000/api/agents',
+        'http://localhost:3000/api/workflows',
         {
           method: 'POST',
           body: JSON.stringify(requestBody)
@@ -249,19 +245,47 @@ describe('Agents API', () => {
       // Verify response
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(400);
-      expect(responseData).toEqual({ error: 'Agent name is required' });
+      expect(responseData).toEqual({ error: 'Missing required fields' });
+    });
+    
+    it('should return 400 if nodes structure is invalid', async () => {
+      // Mock request with invalid nodes
+      const requestBody = {
+        name: 'New Workflow',
+        description: 'Test description',
+        nodes: 'not-an-array-or-object' // Invalid nodes structure
+      };
+      
+      // Set request body
+      mockRequest = new NextRequest(
+        'http://localhost:3000/api/workflows',
+        {
+          method: 'POST',
+          body: JSON.stringify(requestBody)
+        }
+      );
+      
+      // Call the API handler
+      const response = await POST(mockRequest);
+      const responseData = await response.json();
+      
+      // Verify response
+      expect(response).toBeInstanceOf(NextResponse);
+      expect(response.status).toBe(400);
+      expect(responseData).toEqual({ error: 'Invalid nodes structure' });
     });
     
     it('should return 401 if user is not authenticated', async () => {
       // Mock request body
       const requestBody = {
-        name: 'New Agent',
-        description: 'Test description'
+        name: 'New Workflow',
+        description: 'Test description',
+        nodes: [{ id: 'node1', type: 'trigger' }]
       };
       
       // Set request body
       mockRequest = new NextRequest(
-        'http://localhost:3000/api/agents',
+        'http://localhost:3000/api/workflows',
         {
           method: 'POST',
           body: JSON.stringify(requestBody)
@@ -269,7 +293,7 @@ describe('Agents API', () => {
       );
       
       // Mock unauthenticated user
-      mockGetUser.mockResolvedValue({
+      mockGetUser.mockResolvedValueOnce({
         data: { user: null },
         error: { message: 'Not authenticated' }
       });
@@ -287,13 +311,14 @@ describe('Agents API', () => {
     it('should return 500 if database operation fails', async () => {
       // Mock request body
       const requestBody = {
-        name: 'New Agent',
-        description: 'Test description'
+        name: 'New Workflow',
+        description: 'Test description',
+        nodes: [{ id: 'node1', type: 'trigger' }]
       };
       
       // Set request body
       mockRequest = new NextRequest(
-        'http://localhost:3000/api/agents',
+        'http://localhost:3000/api/workflows',
         {
           method: 'POST',
           body: JSON.stringify(requestBody)
@@ -301,7 +326,7 @@ describe('Agents API', () => {
       );
       
       // Mock Prisma error
-      mockAgentCreate.mockRejectedValue(new Error('Database error'));
+      mockCreate.mockRejectedValue(new Error('Database error'));
       
       // Call the API handler
       const response = await POST(mockRequest);
@@ -310,7 +335,7 @@ describe('Agents API', () => {
       // Verify response
       expect(response).toBeInstanceOf(NextResponse);
       expect(response.status).toBe(500);
-      expect(responseData).toHaveProperty('error', 'Failed to create agent');
+      expect(responseData).toHaveProperty('error', 'Failed to create workflow');
       expect(responseData).toHaveProperty('details', 'Database error');
     });
   });

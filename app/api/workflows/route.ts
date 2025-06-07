@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase-client';
+import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/workflows
@@ -8,11 +10,11 @@ import { supabase } from '@/lib/supabase-client';
 export async function GET(req: NextRequest) {
   try {
     // Get user ID from auth context
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', details: authError?.message },
         { status: 401 }
       );
     }
@@ -21,33 +23,37 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const status = url.searchParams.get('status');
     
-    // Build query
-    let query = supabase
-      .from('workflows')
-      .select('*')
-      .eq('user_id', user.id);
+    // Build query with Prisma
+    const whereClause: any = {
+      user_id: user.id
+    };
     
     // Apply filters if provided
     if (status) {
-      query = query.eq('status', status);
+      whereClause.status = status;
     }
     
-    // Execute query
-    const { data: workflows, error } = await query
-      .order('updated_at', { ascending: false });
-    
-    if (error) {
+    try {
+      // Execute query with Prisma
+      const workflows = await prisma.workflow.findMany({
+        where: whereClause,
+        orderBy: {
+          updated_at: 'desc'
+        }
+      });
+      
+      return NextResponse.json({ workflows });
+    } catch (dbError) {
+      console.error('Database error fetching workflows:', dbError);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to fetch workflows', details: (dbError as Error).message },
         { status: 500 }
       );
     }
-    
-    return NextResponse.json({ workflows });
   } catch (error) {
     console.error('Error fetching workflows:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch workflows' },
+      { error: 'Failed to fetch workflows', details: (error as Error).message },
       { status: 500 }
     );
   }
@@ -60,11 +66,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     // Get user ID from auth context
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', details: authError?.message },
         { status: 401 }
       );
     }
@@ -89,31 +95,32 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // Insert new workflow
-    const { data: workflow, error } = await supabase
-      .from('workflows')
-      .insert({
-        name,
-        description: description || '',
-        nodes,
-        status: status || 'draft',
-        user_id: user.id,
-      })
-      .select()
-      .single();
-    
-    if (error) {
+    try {
+      // Insert new workflow with Prisma
+      const workflow = await prisma.workflow.create({
+        data: {
+          name,
+          description: description || '',
+          config: { nodes }, // Store nodes in config field as JSON
+          status: status || 'draft',
+          user_id: user.id,
+          created_at: new Date(),
+          updated_at: new Date()
+        }
+      });
+      
+      return NextResponse.json({ workflow }, { status: 201 });
+    } catch (dbError) {
+      console.error('Database error creating workflow:', dbError);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to create workflow', details: (dbError as Error).message },
         { status: 500 }
       );
     }
-    
-    return NextResponse.json({ workflow }, { status: 201 });
   } catch (error) {
     console.error('Error creating workflow:', error);
     return NextResponse.json(
-      { error: 'Failed to create workflow' },
+      { error: 'Failed to create workflow', details: (error as Error).message },
       { status: 500 }
     );
   }
