@@ -46,3 +46,64 @@ export interface LLMProvider {
   status: "active" | "inactive"
   costPer1k: number
 }
+
+export interface Workflow {
+  id: string
+  name: string
+  description?: string
+  steps: WorkflowStep[]
+  status: "active" | "inactive" | "draft"
+  createdAt: string
+  updatedAt: string
+  userId: string
+}
+
+export interface WorkflowStep {
+  id: string
+  type: string
+  config: any
+  order: number
+}
+
+export interface WorkflowExecution {
+  id: string
+  workflowId: string
+  status: "pending" | "running" | "completed" | "failed"
+  input?: any
+  output?: any
+  error?: string
+  startedAt: string
+  completedAt?: string
+  userId: string
+}
+
+export interface ChatMessage {
+  id: string
+  agentId: string
+  content: string
+  role: "user" | "assistant"
+  timestamp: string
+  metadata?: any
+}
+
+export interface KnowledgeBase {
+  id: string
+  name: string
+  description?: string
+  type: string
+  status: "active" | "inactive"
+  createdAt: string
+  updatedAt: string
+  userId: string
+}
+
+export interface KnowledgeBaseItem {
+  id: string
+  knowledgeBaseId: string
+  title: string
+  content: string
+  type: string
+  metadata?: any
+  createdAt: string
+  updatedAt: string
+}

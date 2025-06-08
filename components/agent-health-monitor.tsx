@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Activity,
   AlertTriangle,
@@ -55,6 +56,7 @@ interface AgentHealthMonitorProps {
 }
 
 export function AgentHealthMonitor({ agents }: AgentHealthMonitorProps) {
+  const [showConfigureModal, setShowConfigureModal] = useState(false)
   const [healthMetrics] = useState<AgentHealthMetrics[]>([
     {
       agentId: "jamie",
@@ -282,7 +284,7 @@ export function AgentHealthMonitor({ agents }: AgentHealthMonitorProps) {
             <RefreshCw className="w-4 h-4 mr-1" />
             Refresh
           </Button>
-          <Button variant="outline" size="sm" className="font-pixel text-xs">
+          <Button variant="outline" size="sm" className="font-pixel text-xs" onClick={() => setShowConfigureModal(true)}>
             <Settings className="w-4 h-4 mr-1" />
             Configure
           </Button>
@@ -603,6 +605,31 @@ export function AgentHealthMonitor({ agents }: AgentHealthMonitorProps) {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Configure Modal */}
+      <Dialog open={showConfigureModal} onOpenChange={setShowConfigureModal}>
+        <DialogContent className="max-w-2xl border-pixel">
+          <DialogHeader>
+            <DialogTitle className="font-pixel text-center text-lg">HEALTH MONITOR CONFIGURATION</DialogTitle>
+            <p className="text-center text-sm text-muted-foreground">
+              Configure monitoring thresholds and alert settings
+            </p>
+          </DialogHeader>
+          <div className="space-y-4 p-4">
+            <p className="text-sm text-muted-foreground">
+              🚧 Configuration panel coming soon! This will allow you to set custom thresholds for health scores, response times, and error rates.
+            </p>
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={() => setShowConfigureModal(false)} className="flex-1 font-pixel text-xs">
+                Cancel
+              </Button>
+              <Button onClick={() => setShowConfigureModal(false)} className="flex-1 font-pixel text-xs">
+                Coming Soon
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

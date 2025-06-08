@@ -41,6 +41,7 @@ interface AppSidebarProps {
       | "templates"
       | "settings",
   ) => void
+  onHireAgent?: () => void
 }
 
 const menuItems = [
@@ -62,7 +63,7 @@ const workflowItems = [
   { title: "Template Store", icon: Store, page: "templates" as const },
 ]
 
-export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
+export function AppSidebar({ currentPage, onPageChange, onHireAgent }: AppSidebarProps) {
   return (
     <Sidebar className="border-r border-pixel">
       <SidebarHeader className="p-4">
@@ -143,7 +144,7 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton className="font-pixel text-xs">
+                <SidebarMenuButton className="font-pixel text-xs" onClick={onHireAgent}>
                   <Plus className="w-4 h-4" />
                   <span>Hire Agent</span>
                 </SidebarMenuButton>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AgentPage } from "@/components/agent-page"
@@ -15,7 +15,12 @@ import { AgentHealthMonitor } from "@/components/agent-health-monitor"
 import { WorkflowBuilder } from "@/components/workflow-builder"
 import { TemplateMarketplace } from "@/components/template-marketplace"
 import { TopBar } from "@/components/top-bar"
+import { HireAgentModal } from "@/components/hire-agent-modal"
+import { useAgents } from "@/lib/hooks/use-api"
+import { useAgentUpdates } from "@/lib/hooks/use-websocket"
 import type { Agent } from "@/lib/types"
+import { Loader2, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // Enhanced sample data with custom emojis
 const initialAgents: Agent[] = [
@@ -266,6 +271,7 @@ const initialAgents: Agent[] = [
 ]
 
 export default function AgentsDashboard() {
+  const [showHireAgent, setShowHireAgent] = useState(false)
   const [currentPage, setCurrentPage] = useState<
     | "dashboard"
     | "agents"
@@ -279,8 +285,30 @@ export default function AgentsDashboard() {
     | "workflows"
     | "templates"
   >("dashboard")
-  const [selectedAgent, setSelectedAgent] = useState<Agent>(initialAgents[0])
-  const [agents] = useState<Agent[]>(initialAgents)
+  
+  // 🚀 REAL API INTEGRATION - Replace sample data with live backend data!
+  const { data: apiAgents, loading, error, refetch } = useAgents()
+  const { agentUpdates, isConnected } = useAgentUpdates()
+  
+  // Use API data if available, fallback to sample data for demo
+  const agents = apiAgents && apiAgents.length > 0 ? apiAgents : initialAgents
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+
+  // Set initial selected agent when agents load
+  useEffect(() => {
+    if (agents.length > 0 && !selectedAgent) {
+      setSelectedAgent(agents[0])
+    }
+  }, [agents, selectedAgent])
+
+  // Handle real-time agent updates
+  useEffect(() => {
+    if (agentUpdates.length > 0) {
+      console.log('🔄 Real-time agent updates received:', agentUpdates)
+      // Refetch agents when updates come in
+      refetch()
+    }
+  }, [agentUpdates, refetch])
 
   const handleSelectAgent = (agent: Agent) => {
     setSelectedAgent(agent)
@@ -294,7 +322,58 @@ export default function AgentsDashboard() {
     setCurrentPage("agent-profile")
   }
 
+  const handleHireAgent = () => {
+    setShowHireAgent(true)
+  }
+
   const renderCurrentPage = () => {
+    // Show loading state only on initial load
+    if (loading && !agents.length) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p className="text-muted-foreground">Loading agents from backend...</p>
+            <p className="text-sm text-muted-foreground">
+              WebSocket: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+            </p>
+          </div>
+        </div>
+      )
+    }
+
+    // Only show error state for non-auth errors
+    if (error && !error.includes('Unauthorized') && !agents.length) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <Alert className="max-w-md">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Failed to load agents: {error}
+              <br />
+              <span className="text-sm text-muted-foreground mt-2 block">
+                Using sample data for demo. Check your backend connection.
+              </span>
+            </AlertDescription>
+          </Alert>
+        </div>
+      )
+    }
+
+    // Ensure we have a selected agent
+    if (!selectedAgent && agents.length > 0) {
+      setSelectedAgent(agents[0])
+      return null
+    }
+
+    if (!selectedAgent) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-muted-foreground">No agents available</p>
+        </div>
+      )
+    }
+
     switch (currentPage) {
       case "dashboard":
         return <DashboardOverview agents={agents} onSelectAgent={handleSelectAgent} />
@@ -326,12 +405,32 @@ export default function AgentsDashboard() {
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full">
-        <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} />
+        <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} onHireAgent={handleHireAgent} />
         <SidebarInset className="flex flex-col">
           <TopBar />
+          {/* 🚀 API Status Indicator */}
+          <div className="px-6 py-2 bg-muted/50 border-b">
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${apiAgents && apiAgents.length > 0 ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                <span className="text-muted-foreground">
+                  {apiAgents && apiAgents.length > 0 
+                    ? `🎉 Live Backend Data (${agents.length} agents)` 
+                    : '🎭 Sample Data (Backend connecting...)'}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span>WebSocket: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}</span>
+                {agentUpdates.length > 0 && (
+                  <span>Updates: {agentUpdates.length}</span>
+                )}
+              </div>
+            </div>
+          </div>
           <div className="flex-1 p-6 overflow-hidden">{renderCurrentPage()}</div>
         </SidebarInset>
       </div>
+      <HireAgentModal isOpen={showHireAgent} onClose={() => setShowHireAgent(false)} />
     </SidebarProvider>
   )
 }

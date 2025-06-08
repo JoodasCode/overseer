@@ -1,6 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { HireAgentModal } from "./hire-agent-modal"
 import { Users, CheckCircle, Clock, TrendingUp, Star, Zap, AlertCircle, Plus, Activity } from "lucide-react"
 import type { Agent } from "@/lib/types"
 
@@ -10,6 +13,8 @@ interface DashboardOverviewProps {
 }
 
 export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewProps) {
+  const [showHireAgent, setShowHireAgent] = useState(false)
+
   const totalTasks = agents.reduce((sum, agent) => sum + agent.tasks.length, 0)
   const completedTasks = agents.reduce(
     (sum, agent) => sum + agent.tasks.filter((t) => t.status === "completed").length,
@@ -45,10 +50,10 @@ export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewPr
           <h1 className="font-pixel text-2xl text-primary">Mission Control</h1>
           <p className="text-muted-foreground font-clean text-sm">Your AI team dashboard</p>
         </div>
-        <button className="pixel-button font-pixel text-xs px-4 py-2 flex items-center">
+        <Button className="pixel-button font-pixel text-xs px-4 py-2 flex items-center" onClick={() => setShowHireAgent(true)}>
           <Plus className="w-4 h-4 mr-1" />
           Hire Agent
-        </button>
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -221,6 +226,8 @@ export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewPr
           </div>
         </div>
       </div>
+
+      <HireAgentModal isOpen={showHireAgent} onClose={() => setShowHireAgent(false)} />
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Zap, Plus, Settings, Play, Pause, Users, Bell, Calendar, Mail, MessageSquare } from "lucide-react"
 import type { Agent } from "@/lib/types"
 
@@ -28,6 +29,7 @@ interface Automation {
 }
 
 export function AutomationsPage({ agents }: AutomationsPageProps) {
+  const [showNewAutomation, setShowNewAutomation] = useState(false)
   const [automations] = useState<Automation[]>([
     {
       id: "1",
@@ -120,7 +122,7 @@ export function AutomationsPage({ agents }: AutomationsPageProps) {
           <h1 className="font-pixel text-2xl">Automation Hub</h1>
           <p className="text-muted-foreground">Manage agent workflows and integrations</p>
         </div>
-        <Button className="font-pixel text-xs">
+        <Button className="font-pixel text-xs" onClick={() => setShowNewAutomation(true)}>
           <Plus className="w-4 h-4 mr-1" />
           New Automation
         </Button>
@@ -294,6 +296,31 @@ export function AutomationsPage({ agents }: AutomationsPageProps) {
           </TabsContent>
         ))}
       </Tabs>
+
+      {/* New Automation Modal */}
+      <Dialog open={showNewAutomation} onOpenChange={setShowNewAutomation}>
+        <DialogContent className="max-w-2xl border-pixel">
+          <DialogHeader>
+            <DialogTitle className="font-pixel text-center text-lg">CREATE NEW AUTOMATION</DialogTitle>
+            <p className="text-center text-sm text-muted-foreground">
+              Set up a new workflow to automate your team's tasks
+            </p>
+          </DialogHeader>
+          <div className="space-y-4 p-4">
+            <p className="text-sm text-muted-foreground">
+              🚧 Automation builder coming soon! This will allow you to create custom workflows with triggers, conditions, and actions.
+            </p>
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={() => setShowNewAutomation(false)} className="flex-1 font-pixel text-xs">
+                Cancel
+              </Button>
+              <Button onClick={() => setShowNewAutomation(false)} className="flex-1 font-pixel text-xs">
+                Coming Soon
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
