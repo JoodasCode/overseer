@@ -330,4 +330,78 @@ export class ContextMapper {
   private getReverseCacheKey(agentId: string, tool: string, externalId: string): string {
     return `context_map_rev:${agentId}:${tool}:${externalId}`;
   }
+
+  /**
+   * Get the full context mapping for a given agent, tool, and contextKey
+   */
+  public async getMapping(agentId: string, tool: string, contextKey: string): Promise<ContextMapping | undefined> {
+    // Try Redis cache for externalId
+    const cacheKey = this.getCacheKey(agentId, tool, contextKey);
+    const cachedExternalId = await redis.get<string>(cacheKey);
+    if (cachedExternalId) {
+      // Try to get the rest from Supabase
+      const { data, error } = await supabase
+        .from('context_mappings')
+        .select('*')
+        .eq('agentId', agentId)
+        .eq('tool', tool)
+        .eq('contextKey', contextKey)
+        .maybeSingle();
+      if (error) {
+        console.error('Failed to get mapping from Supabase:', error);
+        return undefined;
+      }
+      return data || undefined;
+    }
+    // If not in cache, get from Supabase
+    const { data, error } = await supabase
+      .from('context_mappings')
+      .select('*')
+      .eq('agentId', agentId)
+      .eq('tool', tool)
+      .eq('contextKey', contextKey)
+      .maybeSingle();
+    if (error) {
+      console.error('Failed to get mapping from Supabase:', error);
+      return undefined;
+    }
+    if (data) {
+      // Update cache
+      await redis.set(cacheKey, data.externalId);
+      const reverseCacheKey = this.getReverseCacheKey(agentId, tool, data.externalId);
+      await redis.set(reverseCacheKey, contextKey);
+    }
+    return data || undefined;
+  }
+
+  /**
+   * Bulk delete context mappings by agentId, tool, and contextKey
+   */
+  public async bulkDeleteMappings(keys: Array<{ agentId: string; tool: string; contextKey: string }>): Promise<number> {
+    if (!keys.length) return 0;
+    let deletedCount = 0;
+    for (const { agentId, tool, contextKey } of keys) {
+      // Get mapping to find externalId for cache
+      const mapping = await this.getMapping(agentId, tool, contextKey);
+      if (!mapping) continue;
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('context_mappings')
+        .delete()
+        .eq('agentId', agentId)
+        .eq('tool', tool)
+        .eq('contextKey', contextKey);
+      if (error) {
+        console.error('Failed to delete mapping:', error);
+        continue;
+      }
+      // Delete from Redis
+      const cacheKey = this.getCacheKey(agentId, tool, contextKey);
+      await redis.del(cacheKey);
+      const reverseCacheKey = this.getReverseCacheKey(agentId, tool, mapping.externalId);
+      await redis.del(reverseCacheKey);
+      deletedCount++;
+    }
+    return deletedCount;
+  }
 }

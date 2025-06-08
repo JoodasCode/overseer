@@ -74,6 +74,8 @@ describe('ContextMapper', () => {
     
     // Create a fresh instance for each test
     contextMapper = ContextMapper.getInstance();
+    // Clear mappings for isolation
+    (contextMapper as any).mappings = new Map();
   });
 
   afterEach(() => {
@@ -153,5 +155,69 @@ describe('ContextMapper', () => {
     ]);
 
     expect(result).toBe(2);
+  });
+
+  it('upserts and retrieves a mapping', async () => {
+    const mapping = {
+      id: 'm1',
+      agentId: 'agent1',
+      userId: 'user1',
+      tool: 'slack',
+      contextKey: 'channel',
+      externalId: 'C123',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await contextMapper.upsertMapping(mapping);
+    const result = await contextMapper.getMapping('agent1', 'slack', 'channel');
+    expect(result?.externalId).toBe('C123');
+  });
+
+  it('deletes a mapping', async () => {
+    const mapping = {
+      id: 'm2',
+      agentId: 'agent2',
+      userId: 'user2',
+      tool: 'gmail',
+      contextKey: 'thread',
+      externalId: 'T456',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await contextMapper.upsertMapping(mapping);
+    await contextMapper.deleteMapping('agent2', 'gmail', 'thread');
+    const result = await contextMapper.getMapping('agent2', 'gmail', 'thread');
+    expect(result).toBeUndefined();
+  });
+
+  it('bulk upserts mappings', async () => {
+    const mappings = [
+      {
+        id: 'm3',
+        agentId: 'agent3',
+        userId: 'user3',
+        tool: 'notion',
+        contextKey: 'page',
+        externalId: 'P789',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 'm4',
+        agentId: 'agent4',
+        userId: 'user4',
+        tool: 'asana',
+        contextKey: 'task',
+        externalId: 'A101',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    const count = await contextMapper.bulkUpsertMappings(mappings);
+    expect(count).toBe(2);
+    const result1 = await contextMapper.getMapping('agent3', 'notion', 'page');
+    const result2 = await contextMapper.getMapping('agent4', 'asana', 'task');
+    expect(result1?.externalId).toBe('P789');
+    expect(result2?.externalId).toBe('A101');
   });
 });

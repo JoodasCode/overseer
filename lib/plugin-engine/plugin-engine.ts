@@ -45,10 +45,6 @@ export class PluginEngine {
    * Initialize and register default adapters
    */
   private initializeAdapters(): void {
-    // Register Trello adapter
-    const trelloAdapter = new TrelloAdapter(this.errorHandler);
-    this.registerAdapter('trello', trelloAdapter);
-    
     // Register Asana adapter
     const asanaAdapter = new AsanaAdapter();
     this.registerAdapter('asana', asanaAdapter);

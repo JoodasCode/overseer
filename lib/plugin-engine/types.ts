@@ -46,11 +46,11 @@ export interface PluginAdapter {
 // Task intent payload
 export interface TaskIntent {
   agentId: string;
-  intent: string;
-  tool: string;
-  context: Record<string, any>;
   userId: string;
-  scheduledTime?: string;
+  tool: string;
+  intent: string;
+  context: Record<string, any>;
+  scheduledTime?: Date;
 }
 
 // Integration record
@@ -114,4 +114,21 @@ export interface ContextMapping {
   metadata?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TaskResult {
+  success: boolean;
+  message?: string;
+  data?: any;
+}
+
+export interface PluginEngine {
+  registerAdapter(name: string, adapter: any): void;
+  processIntent(intent: TaskIntent): Promise<TaskResult>;
+  executeTaskIntent?(taskIntent: {
+    type: string;
+    config: Record<string, any>;
+    agent_id: string;
+    user_id: string;
+  }): Promise<TaskResult>;
 }

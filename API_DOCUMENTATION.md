@@ -552,6 +552,150 @@ Deletes a specific workflow execution.
 }
 ```
 
+#### POST /api/workflows/[id]/schedule
+Schedule a workflow to run at specified intervals.
+
+**Request Body:**
+```json
+{
+  "cron": "0 0 * * *", // Required: Cron expression
+  "timezone": "UTC", // Optional: Timezone for the schedule
+  "startDate": "2024-03-20T00:00:00Z", // Optional: When to start the schedule
+  "endDate": "2024-12-31T23:59:59Z" // Optional: When to end the schedule
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Workflow scheduled successfully",
+  "schedule": {
+    "cron": "0 0 * * *",
+    "timezone": "UTC",
+    "startDate": "2024-03-20T00:00:00Z",
+    "endDate": "2024-12-31T23:59:59Z"
+  }
+}
+```
+
+#### DELETE /api/workflows/[id]/schedule
+Cancel a scheduled workflow.
+
+**Response:**
+```json
+{
+  "message": "Workflow schedule cancelled successfully"
+}
+```
+
+#### PATCH /api/workflows/[id]/schedule
+Pause or resume a scheduled workflow.
+
+**Request Body:**
+```json
+{
+  "action": "pause" // or "resume"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Workflow schedule paused successfully"
+}
+```
+
+### Workflow Scheduling API
+
+#### POST /api/workflows/schedule
+Schedules a workflow to run at a specified interval.
+
+**Request Body:**
+```json
+{
+  "id": "workflow-1",
+  "workflow": {
+    "id": "workflow-1",
+    "name": "My Workflow"
+  },
+  "interval": 60000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Workflow workflow-1 scheduled."
+}
+```
+
+#### POST /api/workflows/pause
+Pauses a scheduled workflow.
+
+**Request Body:**
+```json
+{
+  "id": "workflow-1"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Workflow workflow-1 paused."
+}
+```
+
+#### POST /api/workflows/resume
+Resumes a paused workflow.
+
+**Request Body:**
+```json
+{
+  "id": "workflow-1",
+  "workflow": {
+    "id": "workflow-1",
+    "name": "My Workflow"
+  },
+  "interval": 60000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Workflow workflow-1 resumed."
+}
+```
+
+## Plugin Engine
+
+### Fallback Messages
+- **GET** `/api/plugin-engine/errors/fallbacks?tool=gmail&agentId=abc`
+- **POST** `/api/plugin-engine/errors/fallbacks`
+- **Body:** `{ tool, message, agentId? }`
+- **Response:** `{ success, tool, agentId, message }`
+
+### Bulk Error Operations
+- **POST** `/api/plugin-engine/errors/bulk`
+- **Body:** `{ action: 'resolve', errorIds: [id, ...] }`
+- **Response:** `{ success, action, count, errorIds }`
+
+### Context Mappings
+- **POST** `/api/plugin-engine/context-mappings/bulk`
+- **Body:** `{ mappings: [...] }`
+- **Response:** `{ success, count, message }`
+
+## Error Handling
+
+### Resolve Error
+- **PATCH** `/api/plugin-engine/errors`
+- **Body:** `{ errorId }`
+- **Response:** `{ success: true }`
+
 ## Authentication
 
 All API endpoints require authentication using Supabase Auth. Include the authentication token in the request headers.

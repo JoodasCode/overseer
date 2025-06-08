@@ -83,12 +83,14 @@ export async function GET(req: NextRequest, { params }: BatchJobResultsParams) {
         job
       });
     } catch (dbError: any) {
-      ErrorHandler.logError({
-        errorCode: 'get_batch_results_db_error',
-        errorMessage: `Database error retrieving batch results: ${dbError.message}`,
-        userId,
-        payload: { jobId, error: dbError.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'get_batch_results_db_error',
+          errorMessage: `Database error retrieving batch results: ${dbError.message}`,
+          userId,
+          payload: { jobId, error: dbError.message }
+        })
+      );
       
       return NextResponse.json(
         { error: 'Failed to retrieve batch results' },
@@ -96,11 +98,14 @@ export async function GET(req: NextRequest, { params }: BatchJobResultsParams) {
       );
     }
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'get_batch_results_error',
-      errorMessage: `Failed to get batch results: ${error.message}`,
-      payload: { error: error.message, jobId: params.jobId }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'get_batch_results_error',
+        errorMessage: `Failed to get batch results: ${error.message}`,
+        userId: session?.user?.id,
+        payload: { error: error.message, jobId: params.jobId }
+      })
+    );
     
     return NextResponse.json(
       { error: 'Failed to get batch results' },

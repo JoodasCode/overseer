@@ -1,3 +1,16 @@
+/*
+  Asana Adapter Unit Tests
+  ------------------------
+  - These tests use Vitest mocks to simulate Asana API responses.
+  - No real network requests are made; this makes tests fast and safe.
+  - We check that our code behaves correctly when the Asana API works or fails.
+  - Real API integration tests are in a separate file (asana-adapter.integration.test.ts).
+
+  In plain English:
+  - These tests pretend to talk to Asana, so we can check our code quickly and safely.
+  - We only talk to the real Asana service in special integration tests.
+*/
+
 /**
  * Asana Adapter Tests
  * 
@@ -7,35 +20,30 @@
 import { AsanaAdapter } from '../asana-adapter';
 import { ErrorHandler } from '../../error-handler';
 import axios from 'axios';
-
-// Import Jest types
-import type { Mock } from 'jest';
-
-// Make Jest globals available
-declare global {
-  const describe: (name: string, fn: () => void) => void;
-  const beforeEach: (fn: () => void) => void;
-  const it: (name: string, fn: () => Promise<void> | void) => void;
-  const expect: any;
-  namespace jest {
-    function spyOn(object: any, methodName: string): Mock;
-  }
-}
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { IntegrationManager } from '../../integration-manager';
 
 // Mock dependencies
-jest.mock('axios');
-jest.mock('../../error-handler');
-jest.mock('../../integration-manager', () => ({
+vi.mock('axios');
+vi.mock('../../error-handler');
+vi.mock('../../integration-manager', () => ({
   IntegrationManager: {
     getInstance: () => ({
-      getIntegration: jest.fn().mockResolvedValue({
+      getIntegration: vi.fn().mockResolvedValue({
         accessToken: 'mock-access-token',
         refreshToken: 'mock-refresh-token',
         status: 'active',
       }),
+      isConnected: vi.fn().mockResolvedValue({ connected: true }),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+      removeIntegration: vi.fn().mockResolvedValue(undefined),
     }),
   },
 }));
+
+// Use real tokens from environment variables
+const realAccessToken = process.env.ASANA_ACCESS_TOKEN;
+const realRefreshToken = process.env.ASANA_REFRESH_TOKEN;
 
 describe('AsanaAdapter', () => {
   let adapter: AsanaAdapter;
@@ -46,10 +54,10 @@ describe('AsanaAdapter', () => {
     adapter = new AsanaAdapter();
     
     // Reset axios mock
-    jest.spyOn(axios, 'get').mockReset();
-    jest.spyOn(axios, 'post').mockReset();
-    jest.spyOn(axios, 'put').mockReset();
-    jest.spyOn(axios, 'delete').mockReset();
+    vi.spyOn(axios, 'get').mockReset();
+    vi.spyOn(axios, 'post').mockReset();
+    vi.spyOn(axios, 'put').mockReset();
+    vi.spyOn(axios, 'delete').mockReset();
   });
   
   describe('connect', () => {
@@ -72,7 +80,7 @@ describe('AsanaAdapter', () => {
           notes: 'Test Description' 
         } 
       };
-      (axios.post as jest.Mock).mockResolvedValueOnce({ data: mockTaskData });
+      (axios.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: mockTaskData });
       
       const result = await adapter.send('agent-123', {
         action: 'create_task',
@@ -97,7 +105,7 @@ describe('AsanaAdapter', () => {
           name: 'Updated Task' 
         } 
       };
-      (axios.put as jest.Mock).mockResolvedValueOnce({ data: mockTaskData });
+      (axios.put as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: mockTaskData });
       
       const result = await adapter.send('agent-123', {
         action: 'update_task',
@@ -115,7 +123,7 @@ describe('AsanaAdapter', () => {
     });
     
     it('should delete a task successfully', async () => {
-      (axios.delete as jest.Mock).mockResolvedValueOnce({ data: {} });
+      (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: {} });
       
       const result = await adapter.send('agent-123', {
         action: 'delete_task',
@@ -131,7 +139,7 @@ describe('AsanaAdapter', () => {
     
     it('should handle errors when sending data', async () => {
       const mockError = new Error('API Error');
-      (axios.post as jest.Mock).mockRejectedValueOnce(mockError);
+      (axios.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce(mockError);
       
       const result = await adapter.send('agent-123', {
         action: 'create_task',
@@ -151,7 +159,7 @@ describe('AsanaAdapter', () => {
           { gid: 'workspace-1', name: 'Workspace 1' }
         ] 
       };
-      (axios.get as jest.Mock).mockResolvedValueOnce({ data: mockWorkspaces });
+      (axios.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: mockWorkspaces });
       
       const result = await adapter.fetch('agent-123', {
         action: 'get_workspaces',
@@ -171,7 +179,7 @@ describe('AsanaAdapter', () => {
           { gid: 'project-1', name: 'Project 1' }
         ] 
       };
-      (axios.get as jest.Mock).mockResolvedValueOnce({ data: mockProjects });
+      (axios.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: mockProjects });
       
       const result = await adapter.fetch('agent-123', {
         action: 'get_projects',
@@ -192,7 +200,7 @@ describe('AsanaAdapter', () => {
           { gid: 'task-1', name: 'Task 1' }
         ] 
       };
-      (axios.get as jest.Mock).mockResolvedValueOnce({ data: mockTasks });
+      (axios.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: mockTasks });
       
       const result = await adapter.fetch('agent-123', {
         action: 'get_tasks',
@@ -214,7 +222,7 @@ describe('AsanaAdapter', () => {
           name: 'Task 123' 
         } 
       };
-      (axios.get as jest.Mock).mockResolvedValueOnce({ data: mockTask });
+      (axios.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: mockTask });
       
       const result = await adapter.fetch('agent-123', {
         action: 'get_task',
@@ -231,7 +239,7 @@ describe('AsanaAdapter', () => {
     
     it('should handle errors when fetching data', async () => {
       const mockError = new Error('API Error');
-      (axios.get as jest.Mock).mockRejectedValueOnce(mockError);
+      (axios.get as ReturnType<typeof vi.fn>).mockRejectedValueOnce(mockError);
       
       const result = await adapter.fetch('agent-123', {
         action: 'get_workspaces',

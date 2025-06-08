@@ -75,17 +75,35 @@ export class CreditSystem {
    */
   public calculateCreditsUsed(
     tokenUsage: TokenUsage,
-    modelName: string
+    modelName: string,
+    userId?: string
   ): number {
-    // Get cost ratio for the model or use default
-    const costRatio = MODEL_COST_RATIOS[modelName as keyof typeof MODEL_COST_RATIOS] || DEFAULT_COST_RATIO;
-    
-    // Calculate credits used (per 1K tokens)
-    const inputCredits = (tokenUsage.promptTokens / 1000) * costRatio.input;
-    const outputCredits = (tokenUsage.completionTokens / 1000) * costRatio.output;
-    
-    // Return total credits used (rounded up to nearest 0.01)
-    return Math.ceil((inputCredits + outputCredits) * 100) / 100;
+    try {
+      // Get cost ratio for the model or use default
+      const costRatio = MODEL_COST_RATIOS[modelName as keyof typeof MODEL_COST_RATIOS] || DEFAULT_COST_RATIO;
+      
+      // Calculate credits used (per 1K tokens)
+      const inputCredits = (tokenUsage.promptTokens / 1000) * costRatio.input;
+      const outputCredits = (tokenUsage.completionTokens / 1000) * costRatio.output;
+      
+      // Return total credits used (rounded up to nearest 0.01)
+      return Math.ceil((inputCredits + outputCredits) * 100) / 100;
+    } catch (error: any) {
+      if (userId) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'calculate_credits_used_error',
+            errorMessage: `Failed to calculate credits used: ${error.message}`,
+            userId,
+            payload: { error: error.message, tokenUsage, modelName }
+          })
+        );
+      }
+      
+      // Return a safe default value based on total tokens
+      const totalTokens = (tokenUsage?.totalTokens || 0) / 1000;
+      return Math.ceil(totalTokens * 5 * 100) / 100; // Use a moderate cost ratio as fallback
+    }
   }
   
   /**
@@ -93,23 +111,40 @@ export class CreditSystem {
    */
   public calculateCreditsForTokens(
     totalTokens: number,
-    model: string
+    model: string,
+    userId?: string
   ): number {
-    // Base rate: $0.01 per 1K tokens
-    let rate = 0.01;
-    
-    // Adjust rate based on model
-    if (model.includes('gpt-4')) {
-      // GPT-4 models are more expensive
-      rate = model.includes('gpt-4o') ? 0.015 : 0.03;
-    } else if (model.includes('gpt-3.5')) {
-      // GPT-3.5 models are cheaper
-      rate = 0.005;
+    try {
+      // Base rate: $0.01 per 1K tokens
+      let rate = 0.01;
+      
+      // Adjust rate based on model
+      if (model.includes('gpt-4')) {
+        // GPT-4 models are more expensive
+        rate = model.includes('gpt-4o') ? 0.015 : 0.03;
+      } else if (model.includes('gpt-3.5')) {
+        // GPT-3.5 models are cheaper
+        rate = 0.005;
+      }
+      
+      // Calculate credits (1 credit = $0.01)
+      // Convert tokens to thousands and multiply by rate
+      return parseFloat(((totalTokens / 1000) * rate).toFixed(4));
+    } catch (error: any) {
+      if (userId) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'calculate_credits_error',
+            errorMessage: `Failed to calculate credits for tokens: ${error.message}`,
+            userId,
+            payload: { error: error.message, totalTokens, model }
+          })
+        );
+      }
+      
+      // Return a safe default value
+      return parseFloat(((totalTokens / 1000) * 0.01).toFixed(4));
     }
-    
-    // Calculate credits (1 credit = $0.01)
-    // Convert tokens to thousands and multiply by rate
-    return parseFloat(((totalTokens / 1000) * rate).toFixed(4));
   }
 
   /**
@@ -135,16 +170,18 @@ export class CreditSystem {
       const availableCredits = user.credits_added - user.credits_used - user.pre_authorized_credits;
       
       // Calculate required credits for this operation
-      const requiredCredits = this.calculateCreditsForTokens(estimatedTokens, model);
+      const requiredCredits = this.calculateCreditsForTokens(estimatedTokens, model, userId);
       
       return availableCredits >= requiredCredits;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'credit_check_error',
-        errorMessage: `Failed to check credit availability: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'credit_check_error',
+          errorMessage: `Failed to check credit availability: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return false;
     }
@@ -158,6 +195,19 @@ export class CreditSystem {
     amount: number
   ): Promise<boolean> {
     try {
+      // Validate amount parameter
+      if (isNaN(amount) || amount <= 0) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'pre_authorize_invalid_amount',
+            errorMessage: 'Invalid pre-authorization amount',
+            userId,
+            payload: { amount }
+          })
+        );
+        return false;
+      }
+      
       // Get user's current credits
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -165,6 +215,14 @@ export class CreditSystem {
       });
       
       if (!user) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'pre_authorize_user_not_found',
+            errorMessage: 'User not found for pre-authorization',
+            userId,
+            payload: { amount }
+          })
+        );
         return false;
       }
       
@@ -172,6 +230,14 @@ export class CreditSystem {
       const availableCredits = user.credits_added - user.credits_used - user.pre_authorized_credits;
       
       if (availableCredits < amount) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'pre_authorize_insufficient_credits',
+            errorMessage: 'Insufficient credits for pre-authorization',
+            userId,
+            payload: { amount, availableCredits }
+          })
+        );
         return false;
       }
       
@@ -193,12 +259,14 @@ export class CreditSystem {
       
       return true;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'pre_authorize_credits_error',
-        errorMessage: `Failed to pre-authorize credits: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'pre_authorize_credits_error',
+          errorMessage: `Failed to pre-authorize credits: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return false;
     }
@@ -212,6 +280,19 @@ export class CreditSystem {
     amount: number
   ): Promise<boolean> {
     try {
+      // Validate amount parameter
+      if (isNaN(amount) || amount <= 0) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'release_pre_authorize_invalid_amount',
+            errorMessage: 'Invalid amount for releasing pre-authorized credits',
+            userId,
+            payload: { amount }
+          })
+        );
+        return false;
+      }
+      
       // Get user's current credits
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -219,6 +300,14 @@ export class CreditSystem {
       });
       
       if (!user) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'release_pre_authorize_user_not_found',
+            errorMessage: 'User not found for releasing pre-authorized credits',
+            userId,
+            payload: { amount }
+          })
+        );
         return false;
       }
       
@@ -243,12 +332,14 @@ export class CreditSystem {
       
       return true;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'release_pre_authorized_credits_error',
-        errorMessage: `Failed to release pre-authorized credits: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'release_pre_authorized_credits_error',
+          errorMessage: `Failed to release pre-authorized credits: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return false;
     }
@@ -263,44 +354,91 @@ export class CreditSystem {
     usage: { promptTokens: number; completionTokens: number; totalTokens: number },
     model: string
   ): Promise<boolean> {
-    // Calculate credits used
-    const creditsUsed = this.calculateCreditsUsed(usage, model);
-    
-    // Record usage in database
-    await prisma.tokenUsage.create({
-      data: {
-        userId,
-        agentId,
-        promptTokens: usage.promptTokens,
-        completionTokens: usage.completionTokens,
-        totalTokens: usage.totalTokens,
-        creditsUsed,
-        modelName: model,
-        timestamp: new Date(),
-      },
-    });
-    
-    // Update user's credit balance
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        creditsUsed: {
-          increment: creditsUsed,
+    try {
+      // Validate input parameters
+      if (!userId) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'track_usage_missing_user',
+            errorMessage: 'User ID is required for tracking usage',
+            payload: { usage, model }
+          })
+        );
+        return false;
+      }
+
+      if (!usage || typeof usage.totalTokens !== 'number' || usage.totalTokens <= 0) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'track_usage_invalid_usage',
+            errorMessage: 'Invalid token usage data',
+            userId,
+            agentId,
+            payload: { usage, model }
+          })
+        );
+        return false;
+      }
+      
+      // Calculate credits used for this usage
+      const creditsUsed = this.calculateCreditsUsed(usage, model, userId);
+      
+      // Get user's current credit usage
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { credits_used: true }
+      });
+      
+      if (!user) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'track_usage_user_not_found',
+            errorMessage: 'User not found for tracking usage',
+            userId,
+            agentId,
+            payload: { usage, model }
+          })
+        );
+        return false;
+      }
+      
+      const currentCreditsUsed = user.credits_used;
+      
+      // Update user's credits used
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          credits_used: {
+            increment: creditsUsed,
+          },
         },
-      },
-    });
-    
-    // Log the operation
-    await this.logCreditOperation(
-      userId,
-      'usage',
-      creditsUsed,
-      0,
-      creditsUsed,
-      'Token usage'
-    );
-    
-    return true;
+      });
+      
+      // Log the operation
+      await this.logCreditOperation(
+        userId,
+        'usage',
+        creditsUsed,
+        currentCreditsUsed,
+        currentCreditsUsed + creditsUsed,
+        'Token usage',
+        { model, tokens: usage.totalTokens, agentId }
+      );
+      
+      return true;
+    } catch (error: any) {
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'track_usage_error',
+          errorMessage: `Failed to track token usage: ${error.message}`,
+          userId,
+          agentId,
+          payload: { error: error.message, usage, model }
+        })
+      );
+      
+      return false;
+    }
   }
 
   /**
@@ -336,12 +474,14 @@ export class CreditSystem {
         planTier: user.plan_tier || 'free',
       };
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'credit_summary_error',
-        errorMessage: `Failed to get credit summary: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'credit_summary_error',
+          errorMessage: `Failed to get credit summary: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return {
         creditsAdded: 0,
@@ -405,12 +545,14 @@ export class CreditSystem {
       
       return { logs: Array.isArray(logs) ? logs : [], total };
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'get_credit_audit_logs_error',
-        errorMessage: `Failed to get credit audit logs: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'get_credit_audit_logs_error',
+          errorMessage: `Failed to get credit audit logs: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return { logs: [], total: 0 };
     }
@@ -463,12 +605,14 @@ export class CreditSystem {
       
       return true;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'add_credits_error',
-        errorMessage: `Failed to add credits: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'add_credits_error',
+          errorMessage: `Failed to add credits: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return false;
     }
@@ -483,8 +627,29 @@ export class CreditSystem {
     adminKey?: string
   ): Promise<boolean> {
     try {
+      // Validate credit amount parameter
+      if (isNaN(creditAmount) || creditAmount < 0) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'reset_credits_invalid_amount',
+            errorMessage: 'Invalid credit amount for monthly reset',
+            userId,
+            payload: { creditAmount }
+          })
+        );
+        return false;
+      }
+      
       // Verify admin key for resetting credits
       if (!adminKey || adminKey !== process.env.ADMIN_API_KEY) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'reset_credits_unauthorized',
+            errorMessage: 'Unauthorized attempt to reset monthly credits',
+            userId,
+            payload: { creditAmount }
+          })
+        );
         return false;
       }
       
@@ -499,6 +664,14 @@ export class CreditSystem {
       });
       
       if (!user) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'reset_credits_user_not_found',
+            errorMessage: 'User not found for monthly credit reset',
+            userId,
+            payload: { creditAmount }
+          })
+        );
         return false;
       }
       
@@ -530,12 +703,14 @@ export class CreditSystem {
       
       return true;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'reset_monthly_credits_error',
-        errorMessage: `Failed to reset monthly credits: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'reset_monthly_credits_error',
+          errorMessage: `Failed to reset monthly credits: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return false;
     }
@@ -551,8 +726,42 @@ export class CreditSystem {
     adminKey?: string
   ): Promise<boolean> {
     try {
+      // Validate amount parameter
+      if (isNaN(amount) || amount <= 0) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'refund_credits_invalid_amount',
+            errorMessage: 'Invalid amount for credit refund',
+            userId,
+            payload: { amount, reason }
+          })
+        );
+        return false;
+      }
+      
+      // Validate reason parameter
+      if (!reason || reason.trim() === '') {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'refund_credits_missing_reason',
+            errorMessage: 'Refund reason is required',
+            userId,
+            payload: { amount }
+          })
+        );
+        return false;
+      }
+      
       // Verify admin key for refunding credits
       if (!adminKey || adminKey !== process.env.ADMIN_API_KEY) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'refund_credits_unauthorized',
+            errorMessage: 'Unauthorized attempt to refund credits',
+            userId,
+            payload: { amount, reason }
+          })
+        );
         return false;
       }
       
@@ -563,6 +772,14 @@ export class CreditSystem {
       });
       
       if (!user) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'refund_credits_user_not_found',
+            errorMessage: 'User not found for credit refund',
+            userId,
+            payload: { amount, reason }
+          })
+        );
         return false;
       }
       
@@ -586,12 +803,14 @@ export class CreditSystem {
       
       return true;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'refund_credits_error',
-        errorMessage: `Failed to refund credits: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'refund_credits_error',
+          errorMessage: `Failed to refund credits: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return false;
     }
@@ -621,12 +840,14 @@ export class CreditSystem {
         )
       `;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'credit_audit_log_error',
-        errorMessage: `Failed to log credit operation: ${error.message}`,
-        userId,
-        payload: { error: error.message, operationType, amount }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'credit_audit_log_error',
+          errorMessage: `Failed to log credit operation: ${error.message}`,
+          userId,
+          payload: { error: error.message, operationType, amount }
+        })
+      );
     }
   }
 }

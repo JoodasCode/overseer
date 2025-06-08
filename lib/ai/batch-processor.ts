@@ -117,24 +117,28 @@ export class BatchProcessor {
       
       // Start processing asynchronously
       this.processJob(jobId, items, options).catch(error => {
-        ErrorHandler.logError({
-          errorCode: 'batch_process_error',
-          errorMessage: `Failed to process batch job: ${error.message}`,
-          userId,
-          agentId: options.agentId,
-          payload: { jobId, error: error.message }
-        });
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'batch_process_error',
+            errorMessage: `Failed to process batch job: ${error.message}`,
+            userId,
+            agentId: options.agentId,
+            payload: { jobId, error: error.message }
+          })
+        );
       });
       
       return newJob;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'create_batch_job_error',
-        errorMessage: `Failed to create batch job: ${error.message}`,
-        userId,
-        agentId: options.agentId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'create_batch_job_error',
+          errorMessage: `Failed to create batch job: ${error.message}`,
+          userId,
+          agentId: options.agentId,
+          payload: { error: error.message }
+        })
+      );
       
       return null;
     }
@@ -319,11 +323,13 @@ export class BatchProcessor {
       
       return job[0] as BatchJob;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'get_job_status_error',
-        errorMessage: `Failed to get job status: ${error.message}`,
-        payload: { jobId, error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'get_job_status_error',
+          errorMessage: `Failed to get job status: ${error.message}`,
+          payload: { jobId, error: error.message }
+        })
+      );
       
       return null;
     }
@@ -377,12 +383,14 @@ export class BatchProcessor {
       
       return true;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'cancel_job_error',
-        errorMessage: `Failed to cancel job: ${error.message}`,
-        userId,
-        payload: { jobId, error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'cancel_job_error',
+          errorMessage: `Failed to cancel job: ${error.message}`,
+          userId,
+          payload: { jobId, error: error.message }
+        })
+      );
       
       return false;
     }
@@ -438,12 +446,14 @@ export class BatchProcessor {
         total,
       };
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'list_jobs_error',
-        errorMessage: `Failed to list jobs: ${error.message}`,
-        userId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'list_jobs_error',
+          errorMessage: `Failed to list jobs: ${error.message}`,
+          userId,
+          payload: { error: error.message }
+        })
+      );
       
       return { jobs: [], total: 0 };
     }

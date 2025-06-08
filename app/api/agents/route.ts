@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase-client';
+import { ErrorHandler } from '@/lib/error-handler';
 
 interface AgentCreateRequest {
   name: string;
@@ -78,14 +79,27 @@ export async function GET(req: NextRequest) {
         },
       });
     } catch (dbError) {
-      console.error('Database error:', dbError);
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'agents_db_fetch_error',
+          errorMessage: 'Database error when fetching agents',
+          userId: user.id,
+          payload: { error: (dbError as Error).message }
+        })
+      );
       return NextResponse.json(
         { error: 'Failed to fetch agents', details: (dbError as Error).message },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error fetching agents:', error);
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'agents_fetch_error',
+        errorMessage: 'Error fetching agents',
+        payload: { error: (error as Error).message }
+      })
+    );
     return NextResponse.json(
       { error: 'Failed to fetch agents', details: (error as Error).message },
       { status: 500 }
@@ -114,6 +128,14 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch (parseError) {
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'agents_invalid_json',
+          errorMessage: 'Invalid JSON in request body when creating agent',
+          userId: user.id,
+          payload: { error: (parseError as Error).message }
+        })
+      );
       return NextResponse.json(
         { error: 'Invalid JSON in request body' },
         { status: 400 }
@@ -124,6 +146,14 @@ export async function POST(req: NextRequest) {
     
     // Validate required fields
     if (!name || name.trim() === '') {
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'agents_missing_name',
+          errorMessage: 'Agent name is required',
+          userId: user.id,
+          payload: { body }
+        })
+      );
       return NextResponse.json(
         { error: 'Agent name is required' },
         { status: 400 }
@@ -161,14 +191,27 @@ export async function POST(req: NextRequest) {
       
       return NextResponse.json({ agent }, { status: 201 });
     } catch (dbError) {
-      console.error('Database error creating agent:', dbError);
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'agents_db_create_error',
+          errorMessage: 'Database error when creating agent',
+          userId: user.id,
+          payload: { error: (dbError as Error).message, agentData: { name, description } }
+        })
+      );
       return NextResponse.json(
         { error: 'Failed to create agent', details: (dbError as Error).message },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error creating agent:', error);
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'agents_create_error',
+        errorMessage: 'Error creating agent',
+        payload: { error: (error as Error).message }
+      })
+    );
     return NextResponse.json(
       { error: 'Failed to create agent', details: (error as Error).message },
       { status: 500 }

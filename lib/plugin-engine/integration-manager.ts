@@ -182,6 +182,7 @@ export class IntegrationManager {
       'notion': async () => this.refreshNotionToken(integration),
       'slack': async () => this.refreshSlackToken(integration),
       'asana': async () => this.refreshAsanaToken(integration),
+      'monday': async () => this.refreshMondayToken(integration),
       // Add more tools as needed
     };
     
@@ -317,5 +318,19 @@ export class IntegrationManager {
       console.error('Error refreshing Asana token:', error);
       throw error;
     }
+  }
+
+  private async refreshMondayToken(integration: Integration): Promise<Partial<Integration>> {
+    // Implementation for Monday.com token refresh
+    // This is a placeholder and should be implemented based on the actual Monday.com OAuth flow
+    return {
+      accessToken: `refreshed_${integration.accessToken}`,
+      expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(), // Placeholder, actual implementation needed
+      metadata: {
+        ...integration.metadata,
+        tokenType: 'Bearer',
+        expiresIn: 3600, // Placeholder, actual implementation needed
+      },
+    };
   }
 }

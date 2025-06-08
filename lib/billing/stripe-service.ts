@@ -123,12 +123,14 @@ export class StripeService {
         url: session.url || '',
       };
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'create_checkout_session_error',
-        errorMessage: `Failed to create checkout session: ${error.message}`,
-        userId,
-        payload: { error: error.message, packageId }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'create_checkout_session_error',
+          errorMessage: `Failed to create checkout session: ${error.message}`,
+          userId,
+          payload: { error: error.message, packageId }
+        })
+      );
       
       return null;
     }
@@ -268,11 +270,13 @@ export class StripeService {
     try {
       return await stripe.customers.retrieve(customerId) as Stripe.Customer;
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'get_customer_error',
-        errorMessage: `Error retrieving customer: ${error.message}`,
-        payload: { error: error.message, customerId }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'get_customer_error',
+          errorMessage: `Error retrieving customer: ${error.message}`,
+          payload: { error: error.message, customerId }
+        })
+      );
       
       return null;
     }
@@ -293,11 +297,13 @@ export class StripeService {
       
       return { url: session.url };
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'create_portal_session_error',
-        errorMessage: `Error creating customer portal session: ${error.message}`,
-        payload: { error: error.message, customerId }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'create_portal_session_error',
+          errorMessage: `Error creating customer portal session: ${error.message}`,
+          payload: { error: error.message, customerId }
+        })
+      );
       
       return null;
     }
@@ -320,11 +326,13 @@ export class StripeService {
         ],
       });
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'update_subscription_quantity_error',
-        errorMessage: `Error updating subscription quantity: ${error.message}`,
-        payload: { error: error.message, subscriptionId, quantity }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'update_subscription_quantity_error',
+          errorMessage: `Error updating subscription quantity: ${error.message}`,
+          payload: { error: error.message, subscriptionId, quantity }
+        })
+      );
       
       return null;
     }
@@ -348,11 +356,13 @@ export class StripeService {
         return await stripe.subscriptions.cancel(subscriptionId);
       }
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'cancel_subscription_error',
-        errorMessage: `Error canceling subscription: ${error.message}`,
-        payload: { error: error.message, subscriptionId }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'cancel_subscription_error',
+          errorMessage: `Error canceling subscription: ${error.message}`,
+          payload: { error: error.message, subscriptionId }
+        })
+      );
       
       return null;
     }
@@ -383,11 +393,13 @@ export class StripeService {
         trialEnd: subscription.trial_end,
       };
     } catch (error: any) {
-      ErrorHandler.logError({
-        errorCode: 'parse_subscription_error',
-        errorMessage: `Error parsing subscription details: ${error.message}`,
-        payload: { error: error.message, subscriptionId: subscription.id }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'parse_subscription_error',
+          errorMessage: `Error parsing subscription details: ${error.message}`,
+          payload: { error: error.message, subscriptionId: subscription.id }
+        })
+      );
       
       return null;
     }

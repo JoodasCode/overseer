@@ -23,8 +23,8 @@ Plugin adapters implement the `PluginAdapter` interface to provide standardized 
 - **GmailAdapter**: Handles Gmail API operations like sending emails, creating drafts, and fetching messages.
 - **NotionAdapter**: Manages Notion API operations like creating pages, updating content, and querying databases.
 - **SlackAdapter**: Handles Slack API operations like sending messages, scheduling messages, and fetching channel history.
-- **TrelloAdapter**: Manages Trello API operations like creating cards, updating cards, and fetching boards, lists, and cards.
 - **AsanaAdapter**: Manages Asana API operations like creating tasks, updating tasks, and fetching workspaces, projects, and tasks.
+- **MondayAdapter**: Manages Monday.com API operations like creating items, updating boards, and fetching data.
 
 ## Webhook System
 

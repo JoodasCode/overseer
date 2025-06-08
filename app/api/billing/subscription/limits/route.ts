@@ -175,11 +175,13 @@ export async function GET(req: NextRequest) {
     
     return NextResponse.json(usageLimits);
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'get_subscription_limits_error',
-      errorMessage: `Failed to get subscription limits: ${error.message}`,
-      payload: { error: error.message }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'get_subscription_limits_error',
+        errorMessage: `Failed to get subscription limits: ${error.message}`,
+        payload: { error: error.message }
+      })
+    );
     
     return NextResponse.json(
       { error: 'Failed to get subscription limits' },
@@ -239,11 +241,13 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json(result);
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'check_usage_limit_error',
-      errorMessage: `Failed to check usage limit: ${error.message}`,
-      payload: { error: error.message }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'check_usage_limit_error',
+        errorMessage: `Failed to check usage limit: ${error.message}`,
+        payload: { error: error.message }
+      })
+    );
     
     return NextResponse.json(
       { error: 'Failed to check usage limit' },

@@ -86,12 +86,14 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
       daysUntilRenewal,
     };
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'get_subscription_info_error',
-      errorMessage: `Failed to get subscription info: ${error.message}`,
-      userId,
-      payload: { error: error.message }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'get_subscription_info_error',
+        errorMessage: `Failed to get subscription info: ${error.message}`,
+        userId,
+        payload: { error: error.message }
+      })
+    );
     
     return null;
   }
@@ -240,12 +242,14 @@ export async function checkUsageLimit(
       remaining,
     };
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'check_usage_limit_error',
-      errorMessage: `Failed to check usage limit: ${error.message}`,
-      userId,
-      payload: { error: error.message, resourceType }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'check_usage_limit_error',
+        errorMessage: `Failed to check usage limit: ${error.message}`,
+        userId,
+        payload: { error: error.message, resourceType }
+      })
+    );
     
     // Default to no limit exceeded in case of error
     return {
@@ -296,12 +300,14 @@ export async function recordResourceUsage(
     
     return true;
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'record_resource_usage_error',
-      errorMessage: `Failed to record resource usage: ${error.message}`,
-      userId,
-      payload: { error: error.message, resourceType, metadata }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'record_resource_usage_error',
+        errorMessage: `Failed to record resource usage: ${error.message}`,
+        userId,
+        payload: { error: error.message, resourceType, metadata }
+      })
+    );
     
     return false;
   }
@@ -416,12 +422,14 @@ export async function getAllUsageLimits(userId: string): Promise<{
       remaining,
     };
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'get_all_usage_limits_error',
-      errorMessage: `Failed to get all usage limits: ${error.message}`,
-      userId,
-      payload: { error: error.message }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'get_all_usage_limits_error',
+        errorMessage: `Failed to get all usage limits: ${error.message}`,
+        userId,
+        payload: { error: error.message }
+      })
+    );
     
     // Return default values in case of error
     return {

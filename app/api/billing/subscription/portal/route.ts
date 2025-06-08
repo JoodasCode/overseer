@@ -62,11 +62,13 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json(portalSession);
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'create_portal_session_error',
-      errorMessage: `Failed to create customer portal session: ${error.message}`,
-      payload: { error: error.message }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'create_portal_session_error',
+        errorMessage: `Failed to create customer portal session: ${error.message}`,
+        payload: { error: error.message }
+      })
+    );
     
     return NextResponse.json(
       { error: 'Failed to create customer portal session' },

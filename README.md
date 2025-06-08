@@ -43,6 +43,7 @@ A comprehensive, production-ready AI agent management system that transforms bus
 - **Stripe Integration**: Seamless payment processing and subscription management
 - **Add-on Credits**: Purchase additional credits as needed
 - **Usage Analytics**: Track credit consumption and resource utilization
+- **Robust Error Handling**: Standardized error handling with detailed logging and metadata
 
 ---
 
@@ -860,3 +861,39 @@ The system is designed to grow with your organization - start with simple agent 
 ---
 
 *Ready to transform your business operations? Deploy AGENTS OS and start building your AI-powered team today!* 🚀
+
+---
+
+## ⚡️ New: Workflow Engine & Plugin Engine
+
+### Workflow Engine
+- Visual node-based workflow builder
+- Supports triggers, actions, agents, conditions, and utilities
+- Real-time execution status and scheduling
+- Robust error handling and retry logic
+
+### Plugin Engine
+- Modular adapters for Gmail, Slack, Notion, Asana, Trello, and more
+- Centralized error handling with fallback messages
+- Bulk error resolution and context mapping
+- Mock/test mode for development without live API keys or DB
+
+---
+
+## 🧪 Testing & Development
+
+### Local Development (Mock/Test Mode)
+- Most features (including workflow builder, plugin engine, and error handling) can be tested in mock mode if the database is unavailable.
+- Mock Supabase and Redis clients are used in development for authentication and caching.
+- Real API integrations are only required for production.
+
+### Running Automated Tests
+- Run `npm test` or `pnpm test` to execute unit and integration tests.
+- Most tests use mocks for DB and external APIs.
+- If the database is unavailable, some integration tests will be skipped or marked as pending.
+
+### What to Expect
+- UI and API will function in mock mode for most features.
+- Workflow execution, plugin engine, and error handling can be tested end-to-end with mock data.
+- Real-time features and scheduling will work with mock events.
+- Database-dependent features (e.g., persistent storage, migrations) will require a live DB connection.

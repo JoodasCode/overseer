@@ -32,11 +32,13 @@ export async function GET(req: NextRequest) {
     
     return NextResponse.json({ keys });
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'list_llm_keys_error',
-      errorMessage: error.message,
-      payload: { error: error.stack }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'list_llm_keys_error',
+        errorMessage: error.message,
+        payload: { error: error.stack }
+      })
+    );
     
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -91,11 +93,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id: keyId, success: true });
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'create_llm_key_error',
-      errorMessage: error.message,
-      payload: { error: error.stack }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'create_llm_key_error',
+        errorMessage: error.message,
+        payload: { error: error.stack }
+      })
+    );
     
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

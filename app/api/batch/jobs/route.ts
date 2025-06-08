@@ -43,11 +43,14 @@ export async function GET(req: NextRequest) {
     
     return NextResponse.json(result);
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'list_batch_jobs_error',
-      errorMessage: `Failed to list batch jobs: ${error.message}`,
-      payload: { error: error.message }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'list_batch_jobs_error',
+        errorMessage: `Failed to list batch jobs: ${error.message}`,
+        userId: session?.user?.id,
+        payload: { error: error.message }
+      })
+    );
     
     return NextResponse.json(
       { error: 'Failed to list batch jobs' },
@@ -108,11 +111,14 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json(job);
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'create_batch_job_error',
-      errorMessage: `Failed to create batch job: ${error.message}`,
-      payload: { error: error.message }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'create_batch_job_error',
+        errorMessage: `Failed to create batch job: ${error.message}`,
+        userId: session?.user?.id,
+        payload: { error: error.message }
+      })
+    );
     
     return NextResponse.json(
       { error: 'Failed to create batch job' },

@@ -55,12 +55,12 @@ import { IntegrationManager } from '../integration-manager';
 // Mock dependencies
 vi.mock('../integration-manager', () => ({
   IntegrationManager: {
-    getInstance: vi.fn(() => ({
+    getInstance: () => ({
       getIntegration: vi.fn(),
-      storeIntegration: vi.fn(),
-      removeIntegration: vi.fn(),
-      refreshToken: vi.fn(),
-    })),
+      isConnected: vi.fn().mockResolvedValue({ connected: true }),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+      removeIntegration: vi.fn().mockResolvedValue(undefined),
+    }),
   },
 }));
 

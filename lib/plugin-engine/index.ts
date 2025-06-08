@@ -31,13 +31,37 @@ export { NotionAdapter } from './adapters/notion-adapter';
 export { SlackAdapter } from './adapters/slack-adapter';
 
 // Factory function to create and initialize the plugin engine
-export function createPluginEngine() {
-  const pluginEngine = PluginEngine.getInstance();
+export async function createPluginEngine(): Promise<PluginEngine> {
+  const baseEngine = await createBasePluginEngine();
   
-  // Register adapters
-  pluginEngine.registerAdapter('gmail', new GmailAdapter());
-  pluginEngine.registerAdapter('notion', new NotionAdapter());
-  pluginEngine.registerAdapter('slack', new SlackAdapter());
-  
-  return pluginEngine;
+  return {
+    ...baseEngine,
+    async executeTaskIntent(taskIntent: {
+      type: string;
+      config: Record<string, any>;
+      agent_id: string;
+      user_id: string;
+    }) {
+      const { type, config, agent_id, user_id } = taskIntent;
+      
+      // Create a task intent from the workflow node
+      const intent = {
+        agentId: agent_id,
+        userId: user_id,
+        tool: type,
+        intent: config.intent || 'execute',
+        context: config.context || {},
+        scheduledTime: config.scheduled_time
+      };
+      
+      // Execute the task using the base engine
+      const result = await baseEngine.processIntent(intent);
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Task execution failed');
+      }
+      
+      return result;
+    }
+  };
 }

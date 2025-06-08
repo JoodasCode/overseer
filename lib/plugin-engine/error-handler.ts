@@ -11,19 +11,45 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { Redis } from '@upstash/redis';
+import Redis from 'ioredis';
 import { ErrorLog } from './types';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Mock Supabase client for development
+const mockSupabase = {
+  auth: {
+    getUser: async () => ({ data: { user: { id: 'mock-user-id' } } }),
+    signOut: async () => ({ error: null }),
+  },
+  from: (table: string) => ({
+    select: () => ({
+      eq: () => Promise.resolve({ data: [], error: null }),
+      insert: () => Promise.resolve({ data: [], error: null }),
+      update: () => Promise.resolve({ data: [], error: null }),
+      delete: () => Promise.resolve({ data: [], error: null }),
+    }),
+  }),
+};
 
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
+// Use mock client in development
+const supabase = process.env.NODE_ENV === 'development' 
+  ? mockSupabase 
+  : createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+
+// Initialize Redis client (mock for development)
+const redis = process.env.NODE_ENV === 'development'
+  ? {
+      get: async () => null,
+      set: async () => 'OK',
+      del: async () => 1,
+    }
+  : new Redis({
+      host: process.env.REDIS_HOST,
+      port: Number(process.env.REDIS_PORT),
+      password: process.env.REDIS_PASSWORD,
+    });
 
 /**
  * Interface for fallback message record in database
@@ -376,3 +402,5 @@ export class ErrorHandler {
     return data?.length || 0;
   }
 }
+
+export { supabase, redis };

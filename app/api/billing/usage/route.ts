@@ -151,11 +151,13 @@ export async function GET(req: NextRequest) {
       usageByAgent,
     });
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'get_usage_error',
-      errorMessage: error.message,
-      payload: { error: error.stack }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'get_usage_error',
+        errorMessage: error.message,
+        payload: { error: error.stack }
+      })
+    );
     
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

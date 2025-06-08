@@ -18,6 +18,75 @@ export interface ErrorDetails {
 
 export class ErrorHandler {
   /**
+   * Static method to log an error with context
+   * 
+   * @param error - The error object or error options
+   * @param context - Optional context information
+   */
+  static logError(error: Error | {
+    errorCode?: string;
+    errorMessage?: string;
+    userId?: string;
+    agentId?: string;
+    payload?: Record<string, any>;
+    name?: string;
+    message?: string;
+  }, context?: string): void {
+    // If it's not an Error instance, convert it to one
+    if (!(error instanceof Error)) {
+      error = ErrorHandler.createCustomError(error);
+    }
+    
+    // Now error is guaranteed to be an Error instance
+    const errorObj = error as Error;
+    
+    console.error(`[ERROR] ${errorObj.message}`, {
+      name: errorObj.name,
+      stack: errorObj.stack,
+      context,
+      // Include extended properties if they exist
+      ...(errorObj as any).errorCode && { errorCode: (errorObj as any).errorCode },
+      ...(errorObj as any).errorMessage && { errorMessage: (errorObj as any).errorMessage },
+      ...(errorObj as any).userId && { userId: (errorObj as any).userId },
+      ...(errorObj as any).agentId && { agentId: (errorObj as any).agentId },
+      ...(errorObj as any).payload && { payload: (errorObj as any).payload },
+    });
+    
+    // Additional error logging logic can be added here
+    // For example, sending to an error monitoring service
+  }
+  
+  /**
+   * Creates a custom error with extended properties
+   * 
+   * @param options - Options for creating the custom error
+   * @returns An Error object with extended properties
+   */
+  static createCustomError(options: {
+    errorCode?: string;
+    errorMessage?: string;
+    userId?: string;
+    agentId?: string;
+    payload?: Record<string, any>;
+    name?: string;
+    message?: string;
+  }): Error {
+    const error = new Error(options.message || options.errorMessage || 'Unknown error');
+    error.name = options.name || 'CustomError';
+    
+    // Add extended properties
+    Object.assign(error, {
+      errorCode: options.errorCode,
+      errorMessage: options.errorMessage || options.message,
+      userId: options.userId,
+      agentId: options.agentId,
+      payload: options.payload || {}
+    });
+    
+    return error;
+  }
+  
+  /**
    * Handle an error by logging it and optionally reporting it
    * 
    * @param details - Error details including the error object, source, and optional metadata
@@ -88,5 +157,48 @@ export class ErrorHandler {
 
     // Additional audit logging logic can be added here
     // For example, logging to a separate audit log table
+  }
+  
+  /**
+   * Creates a custom error with extended properties
+   * 
+   * @param options - Options for creating the custom error
+   * @returns An Error object with extended properties
+   */
+  
+  /**
+   * Instance method to log an error with context
+   * 
+   * @param error - The error object or error options
+   * @param context - Optional context information
+   */
+  logError(error: Error | {
+    errorCode?: string;
+    errorMessage?: string;
+    userId?: string;
+    agentId?: string;
+    payload?: Record<string, any>;
+    name?: string;
+    message?: string;
+  }, context?: string): void {
+    ErrorHandler.logError(error, context);
+  }
+
+  /**
+   * Instance method to create a custom error with extended properties
+   * 
+   * @param options - Options for creating the custom error
+   * @returns An Error object with extended properties
+   */
+  createCustomError(options: {
+    errorCode?: string;
+    errorMessage?: string;
+    userId?: string;
+    agentId?: string;
+    payload?: Record<string, any>;
+    name?: string;
+    message?: string;
+  }): Error {
+    return ErrorHandler.createCustomError(options);
   }
 }

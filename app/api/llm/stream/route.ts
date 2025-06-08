@@ -152,13 +152,15 @@ export async function POST(req: NextRequest) {
         cachedResponse.tokens,
         finalModelConfig.model || 'gpt-4o'
       ).catch(error => {
-        ErrorHandler.logError({
-          errorCode: 'token_tracking_error',
-          errorMessage: `Failed to track cached token usage: ${error.message}`,
-          userId: user.id,
-          agentId,
-          payload: { error: error.message }
-        });
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'token_tracking_error',
+            errorMessage: `Failed to track cached token usage: ${error.message}`,
+            userId: user.id,
+            agentId,
+            payload: { error: error.message }
+          })
+        );
       });
       
       // Return cached response as a stream
@@ -201,13 +203,15 @@ export async function POST(req: NextRequest) {
       tokenUsage,
       finalModelConfig.model || 'gpt-4o'
     ).catch(error => {
-      ErrorHandler.logError({
-        errorCode: 'token_tracking_error',
-        errorMessage: `Failed to track token usage: ${error.message}`,
-        userId: user.id,
-        agentId,
-        payload: { error: error.message }
-      });
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'token_tracking_error',
+          errorMessage: `Failed to track token usage: ${error.message}`,
+          userId: user.id,
+          agentId,
+          payload: { error: error.message }
+        })
+      );
     });
     
     // Cache the response asynchronously if it's not a system message
@@ -223,23 +227,27 @@ export async function POST(req: NextRequest) {
         responseText,
         tokenUsage
       ).catch(error => {
-        ErrorHandler.logError({
-          errorCode: 'cache_error',
-          errorMessage: `Failed to cache response: ${error.message}`,
-          userId: user.id,
-          agentId,
-          payload: { error: error.message }
-        });
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'cache_error',
+            errorMessage: `Failed to cache response: ${error.message}`,
+            userId: user.id,
+            agentId,
+            payload: { error: error.message }
+          })
+        );
       });
     }
 
     return stream;
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'llm_stream_error',
-      errorMessage: error.message,
-      payload: { error: error.stack }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'llm_stream_error',
+        errorMessage: error.message,
+        payload: { error: error.stack }
+      })
+    );
     
     return new Response(`Error: ${error.message}`, { status: 500 });
   }

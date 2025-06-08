@@ -57,28 +57,32 @@ export async function POST(req: NextRequest) {
             );
             
             // Log successful credit purchase
-            ErrorHandler.logError({
-              errorCode: 'credit_purchase_success',
-              errorMessage: `Successfully added ${creditAmount} credits to user ${userId}`,
-              userId,
-              payload: { 
-                creditAmount, 
-                sessionId: session.id,
-                paymentIntent: session.payment_intent
-              }
-            });
+            ErrorHandler.logError(
+              ErrorHandler.createCustomError({
+                errorCode: 'credit_purchase_success',
+                errorMessage: `Successfully added ${creditAmount} credits to user ${userId}`,
+                userId,
+                payload: { 
+                  creditAmount, 
+                  sessionId: session.id,
+                  paymentIntent: session.payment_intent
+                }
+              })
+            );
           } else if (mode === 'subscription') {
             // For subscription checkouts, the subscription is created but we'll handle
             // the actual subscription details in the subscription.created event
-            ErrorHandler.logError({
-              errorCode: 'subscription_checkout_completed',
-              errorMessage: `Subscription checkout completed for user ${userId}`,
-              userId,
-              payload: { 
-                sessionId: session.id,
-                subscriptionId: session.subscription
-              }
-            });
+            ErrorHandler.logError(
+              ErrorHandler.createCustomError({
+                errorCode: 'subscription_checkout_completed',
+                errorMessage: `Subscription checkout completed for user ${userId}`,
+                userId,
+                payload: { 
+                  sessionId: session.id,
+                  subscriptionId: session.subscription
+                }
+              })
+            );
           }
         }
         break;
@@ -179,14 +183,16 @@ export async function POST(req: NextRequest) {
           process.env.ADMIN_API_KEY
         );
         
-        ErrorHandler.logError({
-          errorCode: 'subscription_canceled',
-          errorMessage: `Subscription canceled for user ${user.id}`,
-          userId: user.id,
-          payload: { 
-            subscriptionId: subscription.id
-          }
-        });
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'subscription_canceled',
+            errorMessage: `Subscription canceled for user ${user.id}`,
+            userId: user.id,
+            payload: { 
+              subscriptionId: subscription.id
+            }
+          })
+        );
         
         break;
       }
@@ -236,17 +242,19 @@ export async function POST(req: NextRequest) {
           process.env.ADMIN_API_KEY
         );
         
-        ErrorHandler.logError({
-          errorCode: 'subscription_renewed',
-          errorMessage: `Subscription renewed for user ${user.id}`,
-          userId: user.id,
-          payload: { 
-            planType,
-            planCredits,
-            subscriptionId,
-            invoiceId: invoice.id
-          }
-        });
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'subscription_renewed',
+            errorMessage: `Subscription renewed for user ${user.id}`,
+            userId: user.id,
+            payload: { 
+              planType,
+              planCredits,
+              subscriptionId,
+              invoiceId: invoice.id
+            }
+          })
+        );
         
         break;
       }
@@ -278,15 +286,17 @@ export async function POST(req: NextRequest) {
           },
         });
         
-        ErrorHandler.logError({
-          errorCode: 'subscription_payment_failed',
-          errorMessage: `Subscription payment failed for user ${user.id}`,
-          userId: user.id,
-          payload: { 
-            subscriptionId,
-            invoiceId: invoice.id
-          }
-        });
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'subscription_payment_failed',
+            errorMessage: `Subscription payment failed for user ${user.id}`,
+            userId: user.id,
+            payload: { 
+              subscriptionId,
+              invoiceId: invoice.id
+            }
+          })
+        );
         
         break;
       }
@@ -295,11 +305,13 @@ export async function POST(req: NextRequest) {
     // Return a 200 response to acknowledge receipt of the event
     return NextResponse.json({ received: true });
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'webhook_handler_error',
-      errorMessage: error.message,
-      payload: { error: error.stack }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'webhook_handler_error',
+        errorMessage: error.message,
+        payload: { error: error.stack }
+      })
+    );
     
     // Still return a 200 to prevent Stripe from retrying
     return NextResponse.json({ error: error.message }, { status: 200 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase-client';
 import { TaskPriority, TaskStatus } from '@prisma/client';
+import { emitEvent } from '@/lib/realtime/event-emitter';
 
 // Define options for pagination
 interface PaginationOptions {
@@ -262,7 +263,8 @@ export async function POST(req: NextRequest) {
           },
         },
       });
-      
+      // Emit real-time event
+      emitEvent('broadcast', { type: 'task_created', task });
       return NextResponse.json({ task }, { status: 201 });
     } catch (dbError) {
       console.error('Database error creating task:', dbError);

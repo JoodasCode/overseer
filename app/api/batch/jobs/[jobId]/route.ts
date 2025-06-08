@@ -55,11 +55,14 @@ export async function GET(req: NextRequest, { params }: BatchJobParams) {
     
     return NextResponse.json(job);
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'get_batch_job_error',
-      errorMessage: `Failed to get batch job: ${error.message}`,
-      payload: { error: error.message, jobId: params.jobId }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'get_batch_job_error',
+        errorMessage: `Failed to get batch job: ${error.message}`,
+        userId: session?.user?.id,
+        payload: { error: error.message, jobId: params.jobId }
+      })
+    );
     
     return NextResponse.json(
       { error: 'Failed to get batch job' },
@@ -99,11 +102,14 @@ export async function DELETE(req: NextRequest, { params }: BatchJobParams) {
     
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'cancel_batch_job_error',
-      errorMessage: `Failed to cancel batch job: ${error.message}`,
-      payload: { error: error.message, jobId: params.jobId }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'cancel_batch_job_error',
+        errorMessage: `Failed to cancel batch job: ${error.message}`,
+        userId: session?.user?.id,
+        payload: { error: error.message, jobId: params.jobId }
+      })
+    );
     
     return NextResponse.json(
       { error: 'Failed to cancel batch job' },

@@ -52,11 +52,13 @@ export async function GET(
 
     return NextResponse.json(key);
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'get_llm_key_error',
-      errorMessage: error.message,
-      payload: { error: error.stack }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'get_llm_key_error',
+        errorMessage: error.message,
+        payload: { error: error.stack }
+      })
+    );
     
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -125,11 +127,13 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'update_llm_key_error',
-      errorMessage: error.message,
-      payload: { error: error.stack }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'update_llm_key_error',
+        errorMessage: error.message,
+        payload: { error: error.stack }
+      })
+    );
     
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -170,11 +174,13 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    ErrorHandler.logError({
-      errorCode: 'delete_llm_key_error',
-      errorMessage: error.message,
-      payload: { error: error.stack }
-    });
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'delete_llm_key_error',
+        errorMessage: error.message,
+        payload: { error: error.stack }
+      })
+    );
     
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

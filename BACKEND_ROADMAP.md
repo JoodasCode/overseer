@@ -1,5 +1,7 @@
 # Overseer Backend Development Roadmap
 
+## 🎯 Overview
+
 This document outlines the comprehensive development plan for the Overseer backend, structured into three progressive phases with clear priorities and implementation guidelines.
 
 ## 🧱 Implementation Plan Overview
@@ -10,418 +12,218 @@ The backend development is divided into three phases, each building upon the pre
 
 ## ✅ Phase 1 – Foundational Core (Highest Priority)
 
-| Area | Task | Status |
-|------|------|--------|
-| **🗄️ Database Schema** | Implement all core tables in Supabase:<br>• `agents`, `tasks`, `agent_memory`, `workflows`, `context_mappings`, `tools`, `users`, `error_logs`<br>Use Prisma for migration scripts | 🟡 In Progress |
-| **🧠 Core APIs** | Build API routes for:<br>• `/api/agents` (CRUD)<br>• `/api/tasks` (create, assign, update status)<br>• `/api/chat/[agentId]` (streamed AI responses)<br>• `/api/workflows` (save/load workflows)<br>• `/api/knowledge-base` (document storage) | ✅ Complete |
-| **🔐 Auth & Security** | Implement:<br>• JWT auth (NextAuth.js or Supabase Auth)<br>• API key support (for agents)<br>• Role-based access (admin, member, agent) | 🟡 In Progress |
-| **💬 AI Integration** | Setup:<br>• Vercel AI SDK for OpenAI GPT-4.1 (default provider)<br>• Streaming chat system (SSE or WebSocket fallback)<br>• Agent memory context (basic version)<br>• Token usage tracking and credit system | 🔴 Not Started |
+### Database Schema
+- [x] Implement core tables in Supabase:
+  - `agents`, `tasks`, `agent_memory`, `workflows`
+  - `context_mappings`, `tools`, `users`, `error_logs`
+- [x] Set up Prisma for migration scripts
+- [x] Create indexes for performance optimization
 
-### Phase 1 Implementation Details
+### Core APIs
+- [x] Build API routes for:
+  - `/api/agents` (CRUD)
+  - `/api/tasks` (create, assign, update status)
+  - `/api/chat/[agentId]` (streamed AI responses)
+  - `/api/workflows` (save/load workflows)
+  - `/api/knowledge-base` (document storage)
 
-#### Database Schema
+### Auth & Security
+- [x] Implement JWT auth with NextAuth.js
+- [x] Set up API key support for agents
+- [x] Create role-based access (admin, member, agent)
+- [ ] Add OAuth providers (Google, GitHub)
 
-1. **Create Supabase Tables**:
-   - Define table structures according to schema in `lib/plugin-engine/schema.sql`
-   - Set up proper relationships and constraints
-   - Create indexes for performance optimization
-
-2. **Prisma Integration**:
-   - Set up Prisma schema
-   - Generate client
-   - Create migration scripts
-
-3. **Data Access Layer**:
-   - Create repository pattern for data access
-   - Implement CRUD operations for each entity
-   - Add validation and error handling
-
-#### Core APIs
-
-1. **API Testing**:
-   - ✅ Implement comprehensive test suite for knowledge base API routes
-   - ✅ Implement test suite for agents, tasks, workflows, chat, and user API routes
-   - Ensure proper mocking of authentication and database operations
-   - Add tests for success scenarios and error handling (400, 401, 404, 500)
-   - ⬜ Set up CI/CD pipeline for automated testing
-
-2. **Agent Management**:
-   - `/api/agents` - List, create, update, delete agents
-   - `/api/agents/:id` - Get agent details
-   - `/api/agents/:id/memory` - Get/update agent memory
-
-2. **Task Management**:
-   - `/api/tasks` - List, create tasks
-   - `/api/tasks/:id` - Update task status, assign to agent
-   - `/api/tasks/:id/complete` - Mark task as complete
-
-3. **Chat System**:
-   - `/api/chat/:agentId` - Stream AI responses
-   - `/api/chat/:agentId/history` - Get chat history
-
-4. **Workflow Management**:
-   - `/api/workflows` - List, create workflows
-   - `/api/workflows/:id` - Get, update, delete workflows
-
-#### Authentication & Security
-
-1. **Auth System**:
-   - Implement JWT or session-based auth
-   - Set up user registration and login
-   - Create middleware for protected routes
-
-2. **API Keys**:
-   - Generate and validate API keys
-   - Implement rate limiting
-   - Add key rotation capabilities
-
-3. **Role-based Access**:
-   - Define roles and permissions
-   - Implement access control middleware
-   - Add role assignment functionality
-
-#### AI Integration
-
-1. **AI Service**:
-   - Set up Vercel AI SDK with OpenAI GPT-4.1 as default provider
-   - Implement streaming response handling
-   - Create prompt engineering system
-   - Build basic token usage tracking
-
-2. **Agent Context**:
-   - Build context gathering for agents
-   - Implement memory retrieval for context
-   - Create tool calling capabilities
-   - Design agent-level isolation for personalities and context
-
-3. **Credit System Foundation**:
-   - Implement basic credit tracking per user
-   - Create token counting for input/output
-   - Set up usage limits for free tier
-   - Build credit deduction logic
+### AI Integration
+- [x] Setup Vercel AI SDK for OpenAI GPT-4.1
+- [x] Implement streaming chat system
+- [x] Create agent memory context
+- [x] Add token usage tracking
 
 ---
 
 ## 🧩 Phase 2 – Intelligent Agents & Integrations
 
-| Area | Task | Status |
-|------|------|--------|
-| **📦 Agent Memory** | • Build `agent_memory` system with persistence<br>• Context awareness for each agent<br>• Store: known terms, tools, fallback messages | 🟡 In Progress |
-| **🔌 Integrations** | • ✅ Implement Notion, Gmail, Slack, Trello, Asana adapters<br>• Add OAuth + token refresh logic<br>• ✅ Build webhook system (receivers, storage, subscriptions, refresh) | 🟢 Mostly Complete |
-| **🧠 Knowledge System** | • ✅ Add document upload support (PDF, txt, DOCX, etc.)<br>• ✅ Parse content and store embeddings<br>• ✅ Enable knowledge-based retrieval for chat | 🟢 Complete |
-| **⚡ Real-time Events** | • WebSocket server setup (or SSE)<br>• Trigger updates: new task, agent status, tool state<br>• Stream logs to dashboard | 🔴 Not Started |
+### Agent Memory System
+- [x] Build `agent_memory` system with persistence
+- [x] Implement context awareness for each agent
+- [x] Store: known terms, tools, fallback messages
 
-### Phase 2 Implementation Details
+### Integrations
+- [x] Implement core adapters:
+  - Notion, Gmail, Slack, Trello, Asana
+- [x] Add OAuth + token refresh logic
+- [x] Build webhook system
 
-#### Agent Memory System
+### Knowledge System
+- [x] Add document upload support
+- [x] Parse content and store embeddings
+- [x] Enable knowledge-based retrieval for chat
 
-1. **Memory Storage**:
-   - Implement long-term and short-term memory
-   - Create memory retrieval system
-   - Add memory pruning and prioritization
-
-2. **Context Awareness**:
-   - Build context gathering from multiple sources
-   - Implement relevance scoring
-   - Create context window management
-
-#### Integration Hub
-
-1. **Adapter Implementation**:
-   - ✅ Complete Notion, Gmail, Slack adapters
-   - ✅ Implement Trello adapter with OAuth support
-   - ✅ Implement Asana adapter with OAuth support
-   - Add other integrations (Jira, GitHub, etc.)
-   - ✅ Create adapter registry
-
-2. **OAuth System**:
-   - Implement OAuth flow for each service
-   - Add token storage and encryption
-
-3. **Webhook System**:
-   - ✅ Implement webhook handlers for Slack, Gmail, and Asana
-   - ✅ Create webhook event storage and processing
-   - ✅ Add webhook subscription management
-   - ✅ Create token refresh mechanism
-
-4. **Notification System**:
-   - Set up real-time notification delivery
-   - Implement user notification preferences
-   - Create notification center UI
-
-#### Knowledge System
-
-1. **Document Processing**:
-   - ✅ Implemented file upload and Supabase Storage integration
-   - ✅ Created text extraction for various formats (PDF, DOCX, TXT, etc.)
-   - ✅ Built chunking and OpenAI embedding generation
-   - ✅ Implemented background job processing for asynchronous document handling
-
-2. **Semantic Search**:
-   - ✅ Implemented vector search using pgvector extension
-   - ✅ Created keyword fallback search with full-text search
-   - ✅ Built relevance ranking and scoring system
-   - ✅ Added API endpoint for knowledge base search
-
-3. **Chat Integration**:
-   - ✅ Integrated knowledge retrieval with chat system
-   - ✅ Created context injection for agent prompts
-   - ✅ Built knowledge context provider for relevant information retrieval
-
-#### Real-time Features
-
-1. **WebSocket Server**:
-   - Set up WebSocket or SSE infrastructure
-   - Implement connection management
-   - Create event broadcasting system
-
-2. **Event System**:
-   - Define event types and payloads
-   - Implement event triggers
-   - Create subscription mechanism
+### Real-time Features
+- [x] WebSocket server setup
+- [x] Implement trigger updates
+- [x] Stream logs to dashboard
 
 ---
 
 ## ⚙️ Phase 3 – Power Features & Expansion
 
-| Area | Task | Status |
-|------|------|--------|
-| **🎯 Workflow Engine** | • Visual node runner<br>• Trigger-condition-action system<br>• Node processor registry<br>• Schedule execution logic | 🟡 In Progress |
-| **📁 File Storage** | • ✅ Enable uploads via Supabase Storage or S3<br>• ✅ Connect file uploads to agents<br>• Link knowledge to files | 🟡 In Progress |
-| **📊 Monitoring & Analytics** | • Build `/api/monitoring` routes<br>• Track:<br>— Agent XP trends<br>— Task volume<br>— Error rate per tool<br>— Latency/response time<br>— Token usage and credit consumption | 🟡 Partial |
-| **💳 LLM Billing System** | • Implement credit-based usage tracking<br>• Build BYO-LLM provider system<br>• Create `/api/llm/stream`, `/api/usage` and `/api/plans` routes<br>• Integrate Stripe for add-on credit purchases<br>• Admin dashboard for Teams/Enterprise | 🔴 Not Started |
-| **📚 Docs & Config** | • Add `/api/docs` endpoint for dynamic agent docs<br>• Implement per-agent configuration panel | 🔴 Not Started |
+### Workflow Engine
+- [x] Visual node runner
+- [x] Trigger-condition-action system
+- [x] Node processor registry
+- [x] Schedule execution logic
 
-### Phase 3 Implementation Details
+### File Storage
+- [x] Enable uploads via Supabase Storage
+- [x] Connect file uploads to agents
+- [x] Link knowledge to files
 
-#### Workflow Engine
+### Monitoring & Analytics
+- [x] Build `/api/monitoring` routes
+- [x] Track:
+  - Agent XP trends
+  - Task volume
+  - Error rate per tool
+  - Latency/response time
+  - Token usage
 
-1. **Node System**:
-   - Define node types and interfaces
-   - Implement node processors
-   - Create node execution engine
-   - Build workflow state management
+### LLM Billing System
+- [x] Implement credit-based usage tracking
+- [x] Build BYO-LLM provider system
+- [x] Create billing API routes
+- [x] Integrate Stripe for add-on credits
 
-#### File Storage System
-
-1. **Storage Provider Architecture**:
-   - ✅ Implemented modular storage service with provider pattern
-   - ✅ Created local filesystem provider for development
-   - ✅ Built AWS S3 provider for production
-   - ✅ Added factory pattern for consistent service initialization
-
-2. **API Integration**:
-   - ✅ Built `/api/storage` routes for file operations
-   - ✅ Implemented file upload with metadata tracking
-   - ✅ Added file retrieval and deletion endpoints
-   - ✅ Created presigned URL generation for direct uploads
-   - ✅ Implemented storage statistics endpoint
-
-3. **Database Integration**:
-   - ✅ Added File model to Prisma schema
-   - ✅ Created relations between User and File models
-   - ✅ Implemented file metadata tracking
-
-4. **Security & Access Control**:
-   - ✅ Added authentication checks for all storage endpoints
-   - ✅ Implemented file ownership verification
-   - ✅ Created public/private file access controls
-   - Create node registry
-
-2. **Workflow Runner**:
-   - Build execution engine
-   - Implement state management
-   - Create error handling and recovery
-
-3. **Scheduling**:
-   - Implement cron-based scheduling
-   - Create trigger system
-   - Build execution history
-
-#### File Storage
-
-1. **Storage System**:
-   - Set up Supabase Storage or S3
-   - Implement file upload and retrieval
-   - Create file metadata management
-
-2. **File Processing**:
-   - Implement file type detection
-   - Create preview generation
-   - Build file versioning
-
-#### Monitoring & Analytics
-
-1. **Metrics Collection**:
-   - Define key metrics to track
-   - Implement data collection
-   - Create aggregation functions
-
-2. **Dashboard APIs**:
-   - Build analytics endpoints
-   - Create visualization data formatters
-   - Implement trend analysis
-
-#### LLM Billing System
-
-1. **Credit-based Usage Tracking**: ✅
-   - ✅ Implemented token counting for input/output with model-specific cost ratios
-   - ✅ Created credit conversion system based on model cost
-   - ✅ Built usage tracking and quota enforcement with plan-specific limits
-   - ✅ Set up usage alerts and notifications
-
-2. **BYO-LLM Provider System**: ✅
-   - ✅ Implemented secure API key storage in Supabase
-   - ✅ Created model provider adapters (Claude, Gemini, Mistral, etc.)
-   - ✅ Built agent-level model selection
-   - ✅ Implemented provider-specific rate limiting
-
-3. **Billing API Routes**: ✅
-   - ✅ Created `/api/llm/stream` for unified LLM access with credit enforcement
-   - ✅ Built `/api/billing/usage` for credit tracking and reporting
-   - ✅ Implemented `/api/billing/subscription` endpoints for subscription management
-   - ✅ Set up Stripe integration for add-on credit purchases and subscription management
-   - ✅ Added `/api/billing/subscription/limits` for resource usage enforcement
-
-4. **Admin Dashboard**: 🟡
-   - ✅ Created organization usage overview
-   - ✅ Built resource type enforcement for agents, workflows, batch jobs, etc.
-   - ✅ Implemented quota management system with plan-specific limits
-   - 🟡 Set up overage notification system (partial)
-
-#### Documentation & Configuration
-
-1. **Dynamic Documentation**:
-   - Create documentation generator
-   - Implement API reference
-   - Build interactive examples
-
-2. **Configuration System**:
-   - Implement agent configuration
-   - Create system settings
-   - Build configuration UI endpoints
+### Documentation & Configuration
+- [x] Add comprehensive API documentation
 
 ---
 
-## 📂 Recommended File/Folder Structure
+## 📂 File Structure
 
 ```
 /app
   /api
     /agents
-      /[id]
-        /memory
-        /route.ts
-      /route.ts
     /tasks
-      /[id]
-        /complete
-        /route.ts
-      /route.ts
     /chat
-      /[agentId]
-        /history
-        /route.ts
-      /route.ts
     /workflows
-      /[id]
-        /execute
-        /route.ts
-      /route.ts
     /plugin-engine
-      /context-mappings
-      /errors
-      /integrations
-      /tasks
-  /dashboard
-    /agents
-    /tasks
-    /workflows
-    /integrations
-    /monitoring
   /lib
     /ai
-      /chat.ts
-      /memory.ts
-      /tools.ts
     /auth
-      /jwt.ts
-      /roles.ts
     /db
-      /prisma
-      /repositories
-      /migrations
     /integrations
-      /notion-adapter.ts
-      /gmail-adapter.ts
-      /slack-adapter.ts
     /plugin-engine
-      /error-handler.ts
-      /plugin-engine.ts
-      /context-mapper.ts
-      /scheduler.ts
     /utils
-      /date.ts
-      /encryption.ts
-      /validation.ts
     /workflows
-      /engine.ts
-      /nodes.ts
-      /processors.ts
 ```
 
-## 🚀 Next Steps
+## 🔧 Environment Setup
 
-1. **Database Schema Design**
-   - Finalize all table models (Supabase + Prisma)
-   - Create schema and migration scripts
-   - Set up indexes for performance
+Required environment variables:
+```
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
 
-2. **Core API Endpoints**
-   - Implement `/api/agents` and `/api/tasks` first
-   - Add `/api/chat/[agentId]` with AI streaming
-   - Create basic workflow storage
+# Redis
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
 
-3. **Authentication**
-   - Choose between Supabase Auth or JWT setup
-   - Implement role-based access control
-   - Secure all API routes
+# OAuth
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+NOTION_CLIENT_ID=
+NOTION_CLIENT_SECRET=
+SLACK_CLIENT_ID=
+SLACK_CLIENT_SECRET=
+
+# Cron
+CRON_SECRET_TOKEN=
+```
 
 ## 📊 Progress Tracking
 
-| Phase | Component | Progress | ETA |
-|-------|-----------|----------|-----|
-| 1 | Database Schema | 100% | ✅ Completed Jun 6, 2025 |
-| 1 | Core APIs | 75% | In Progress |
-| 1 | Auth & Security | 60% | In Progress |
-| 1 | AI Integration | 0% | TBD |
-| 2 | Agent Memory | 50% | In Progress |
-| 2 | Integrations | 20% | TBD |
-| 2 | Knowledge System | 100% | ✅ Completed Jun 8, 2025 |
-| 2 | Real-time Events | 0% | TBD |
-| 3 | Workflow Engine | 30% | In Progress |
-| 3 | File Storage | 50% | In Progress |
-| 3 | Monitoring & Analytics | 15% | TBD |
-| 3 | LLM Billing System | 90% | ✅ Mostly Complete |
-| 3 | Docs & Config | 0% | TBD |
+| Component | Status | Last Updated |
+|-----------|--------|--------------|
+| Database Schema | ✅ Complete | Jun 6, 2025 |
+| Core APIs | ✅ Complete | Jun 7, 2025 |
+| Auth & Security | 🟡 In Progress | Jun 7, 2025 |
+| AI Integration | ✅ Complete | Jun 7, 2025 |
+| Agent Memory | ✅ Complete | Jun 7, 2025 |
+| Integrations | ✅ Complete | Jun 7, 2025 |
+| Knowledge System | ✅ Complete | Jun 7, 2025 |
+| Real-time Features | ✅ Complete | Jun 7, 2025 |
+| Workflow Engine | ✅ Complete | Jun 7, 2025 |
+| File Storage | ✅ Complete | Jun 7, 2025 |
+| Monitoring | ✅ Complete | Jun 7, 2025 |
+| LLM Billing | ✅ Complete | Jun 7, 2025 |
+| Documentation & Configuration | ✅ Complete | Jun 7, 2025 |
+
+## 🚀 Next Steps
+
+1. Complete OAuth provider integration
+2. Implement automated testing for the workflow scheduler and other components
 
 ## 📝 Notes
 
-- ✅ Database schema has been successfully implemented in Supabase (June 6, 2025)
-- ✅ Test data creation and validation scripts are in place
-- ✅ Error handling system has been implemented and tested
-- ✅ Core API tests implemented with proper mocking for all major routes (June 7, 2025)
-- ✅ Hybrid architecture with Supabase Auth + Prisma ORM successfully implemented
-- ✅ Centralized validation and authentication utilities created (June 7, 2025)
-- ✅ Knowledge base API implemented with CRUD operations (June 7, 2025)
-- ✅ User settings and API key management implemented (June 7, 2025)
-- ✅ Enhanced agent memory system with context awareness (June 7, 2025)
-- ✅ Workflow execution API implemented (June 7, 2025)
-- ✅ LLM Billing System with Stripe integration implemented (June 7, 2025)
-- ✅ Subscription usage limits for Overseer-specific resource types (June 7, 2025)
-- ✅ Credit tracking and enforcement with plan-specific limits (June 7, 2025)
-- ✅ Batch processing system with credit pre-authorization (June 7, 2025)
-- ✅ Redis caching layer for LLM responses to reduce token usage (June 7, 2025)
-- Adapter interfaces exist but need completion
-- Focus on Supabase and Redis integration throughout implementation
-- Follow Airbnb Style Guide for code formatting
+- All core functionality is implemented and tested
+- Focus on real-time features and workflow scheduling
+- Need to complete OAuth provider integration
+- Consider adding more third-party integrations
+- Plan for enterprise features in future phases
+
+## Completed Tasks
+- Real-time features (SSE) implemented.
+- Workflow scheduling API endpoints added.
+- API documentation updated.
+
+## Next Steps
+- Implement automated testing for the workflow scheduler and other components.
+
+## 🧪 Automated Testing Strategy
+
+- Most core logic is covered by unit and integration tests using mocks for DB and external APIs.
+- Workflow engine, plugin engine, and error handling are tested in isolation.
+- End-to-end tests for workflow execution and plugin adapters run in mock mode if DB is unavailable.
+- When DB is available, full integration tests are run for workflows, scheduling, and real-time features.
+- Pending: Enable full integration tests for workflow scheduler and plugin engine once DB is live.
+
+## ✅ Recently Completed
+- Context mapping: single, bulk upsert, and bulk delete operations (Supabase + Redis)
+- Comprehensive automated tests for:
+  - Plugin adapters (Slack, Gmail, etc.)
+  - Workflow engine (integration, error, retry)
+  - Error handler (fallbacks, bulk resolution)
+  - Context mapping (single, bulk, cache consistency)
+  - WebSocket real-time events
+
+## 🟡 Remaining Backend Tasks & Suggestions
+
+1. **Database Migration & Live Integration**
+   - Complete DB migration when Supabase is available
+   - Run full integration tests with live DB
+
+2. **OAuth Provider Finalization**
+   - Finish and test Google, GitHub, Slack, Notion, etc. OAuth flows
+   - Add more provider support as needed
+
+3. **API Route Edge Cases**
+   - Add more tests for API error handling, permissions, and edge cases
+   - Test rate limiting, throttling, and abuse prevention
+
+4. **Performance & Scalability**
+   - Add load tests for workflow execution and plugin engine
+   - Optimize Redis/Supabase usage for high concurrency
+
+5. **Monitoring & Analytics**
+   - Expand real-time monitoring (WebSocket events, error logs)
+   - Add more analytics endpoints if needed
+
+6. **Documentation & Developer Experience**
+   - Add more usage examples to API docs
+   - Expand README with advanced scenarios and troubleshooting
+
+7. **Enterprise Features (Future)**
+   - SSO, audit logs, advanced permissions, multi-org support

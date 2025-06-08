@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase-client';
+import { ErrorHandler } from '@/lib/error-handler';
 
 interface AgentUpdateRequest {
   name?: string;
@@ -54,6 +55,14 @@ export async function GET(
       });
       
       if (!agent) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'agent_detail_not_found',
+            errorMessage: 'Agent not found',
+            userId: user.id,
+            payload: { agentId }
+          })
+        );
         return NextResponse.json(
           { error: 'Agent not found' },
           { status: 404 }
@@ -62,14 +71,29 @@ export async function GET(
       
       return NextResponse.json({ agent });
     } catch (dbError) {
-      console.error('Database error fetching agent:', dbError);
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'agent_detail_db_error',
+          errorMessage: 'Database error fetching agent',
+          userId: user.id,
+          agentId,
+          payload: { error: (dbError as Error).message }
+        })
+      );
       return NextResponse.json(
         { error: 'Failed to fetch agent', details: (dbError as Error).message },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error fetching agent:', error);
+    const agentId = params?.id;
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'agent_detail_error',
+        errorMessage: 'Error fetching agent',
+        payload: { error: (error as Error).message, agentId }
+      })
+    );
     return NextResponse.json(
       { error: 'Failed to fetch agent', details: (error as Error).message },
       { status: 500 }
@@ -130,6 +154,14 @@ export async function PATCH(
       });
       
       if (!existingAgent) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'agent_update_not_found',
+            errorMessage: 'Agent not found or permission denied for update',
+            userId: user.id,
+            payload: { agentId }
+          })
+        );
         return NextResponse.json(
           { error: 'Agent not found or you do not have permission to update it' },
           { status: 404 }
@@ -149,14 +181,29 @@ export async function PATCH(
       
       return NextResponse.json({ agent: updatedAgent });
     } catch (dbError) {
-      console.error('Database error updating agent:', dbError);
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'agent_update_db_error',
+          errorMessage: 'Database error updating agent',
+          userId: user.id,
+          agentId,
+          payload: { error: (dbError as Error).message, updateData }
+        })
+      );
       return NextResponse.json(
         { error: 'Failed to update agent', details: (dbError as Error).message },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error updating agent:', error);
+    const agentId = params?.id;
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'agent_update_error',
+        errorMessage: 'Error updating agent',
+        payload: { error: (error as Error).message, agentId }
+      })
+    );
     return NextResponse.json(
       { error: 'Failed to update agent', details: (error as Error).message },
       { status: 500 }
@@ -204,6 +251,14 @@ export async function DELETE(
       });
       
       if (!existingAgent) {
+        ErrorHandler.logError(
+          ErrorHandler.createCustomError({
+            errorCode: 'agent_delete_not_found',
+            errorMessage: 'Agent not found or permission denied for deletion',
+            userId: user.id,
+            payload: { agentId }
+          })
+        );
         return NextResponse.json(
           { error: 'Agent not found or you do not have permission to delete it' },
           { status: 404 }
@@ -222,14 +277,29 @@ export async function DELETE(
         { status: 200 }
       );
     } catch (dbError) {
-      console.error('Database error deleting agent:', dbError);
+      ErrorHandler.logError(
+        ErrorHandler.createCustomError({
+          errorCode: 'agent_delete_db_error',
+          errorMessage: 'Database error deleting agent',
+          userId: user.id,
+          agentId,
+          payload: { error: (dbError as Error).message }
+        })
+      );
       return NextResponse.json(
         { error: 'Failed to delete agent', details: (dbError as Error).message },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error deleting agent:', error);
+    const agentId = params?.id;
+    ErrorHandler.logError(
+      ErrorHandler.createCustomError({
+        errorCode: 'agent_delete_error',
+        errorMessage: 'Error deleting agent',
+        payload: { error: (error as Error).message, agentId }
+      })
+    );
     return NextResponse.json(
       { error: 'Failed to delete agent', details: (error as Error).message },
       { status: 500 }
