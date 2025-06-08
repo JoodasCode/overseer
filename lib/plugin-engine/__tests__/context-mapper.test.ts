@@ -5,58 +5,163 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ContextMapper } from '../context-mapper';
 
+// Create a simple in-memory store for testing that can be accessed by tests
+const dbStore = new Map<string, any>();
+
 // Mock dependencies
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              maybeSingle: vi.fn(() => ({ data: { externalId: 'external-123', contextKey: 'project-123' }, error: null })),
-              single: vi.fn(() => ({ data: { id: 'mapping-123', agentId: 'agent-123', tool: 'notion', contextKey: 'project-123', externalId: 'external-123' }, error: null })),
-              order: vi.fn(() => ({ data: [{ id: 'mapping-123', contextKey: 'project-123', externalId: 'external-123' }], error: null })),
-            })),
-            maybeSingle: vi.fn(() => ({ data: { externalId: 'external-123', contextKey: 'project-123' }, error: null })),
-            single: vi.fn(() => ({ data: { id: 'mapping-123', agentId: 'agent-123', tool: 'notion', contextKey: 'project-123', externalId: 'external-123' }, error: null })),
-            order: vi.fn(() => ({ data: [{ id: 'mapping-123', contextKey: 'project-123', externalId: 'external-123' }], error: null })),
-          })),
-          single: vi.fn(() => ({ data: { id: 'mapping-123', agentId: 'agent-123', tool: 'notion', contextKey: 'project-123', externalId: 'external-123' }, error: null })),
-          maybeSingle: vi.fn(() => ({ data: { externalId: 'external-123', contextKey: 'project-123' }, error: null })),
-        })),
-        single: vi.fn(() => ({ data: { id: 'mapping-123', agentId: 'agent-123', tool: 'notion', contextKey: 'project-123', externalId: 'external-123' }, error: null })),
-      })),
-      insert: vi.fn(() => ({
+vi.mock('@supabase/supabase-js', () => {
+  
+  return {
+    createClient: vi.fn(() => ({
+      from: vi.fn(() => ({
         select: vi.fn(() => ({
+          eq: vi.fn((field: string, value: string) => ({
+            eq: vi.fn((field2: string, value2: string) => ({
+              eq: vi.fn((field3: string, value3: string) => ({
+                maybeSingle: vi.fn(() => {
+                  // Find matching record
+                  for (const [key, record] of dbStore.entries()) {
+                    if (record[field] === value && record[field2] === value2 && record[field3] === value3) {
+                      return { data: record, error: null };
+                    }
+                  }
+                  return { data: null, error: null };
+                }),
+                single: vi.fn(() => {
+                  // Find matching record
+                  for (const [key, record] of dbStore.entries()) {
+                    if (record[field] === value && record[field2] === value2 && record[field3] === value3) {
+                      return { data: record, error: null };
+                    }
+                  }
+                  return { data: null, error: null };
+                }),
+                order: vi.fn(() => ({ 
+                  data: Array.from(dbStore.values()).filter(record => 
+                    record[field] === value && record[field2] === value2
+                  ), 
+                  error: null 
+                })),
+              })),
+              maybeSingle: vi.fn(() => {
+                // Find matching record
+                for (const [key, record] of dbStore.entries()) {
+                  if (record[field] === value && record[field2] === value2) {
+                    return { data: record, error: null };
+                  }
+                }
+                return { data: null, error: null };
+              }),
+              single: vi.fn(() => {
+                // Find matching record
+                for (const [key, record] of dbStore.entries()) {
+                  if (record[field] === value && record[field2] === value2) {
+                    return { data: record, error: null };
+                  }
+                }
+                return { data: null, error: null };
+              }),
+              order: vi.fn(() => ({ 
+                data: Array.from(dbStore.values()).filter(record => 
+                  record[field] === value
+                ), 
+                error: null 
+              })),
+            })),
+            single: vi.fn(() => {
+              // Find matching record
+              for (const [key, record] of dbStore.entries()) {
+                if (record[field] === value) {
+                  return { data: record, error: null };
+                }
+              }
+              return { data: null, error: null };
+            }),
+            maybeSingle: vi.fn(() => {
+              // Find matching record
+              for (const [key, record] of dbStore.entries()) {
+                if (record[field] === value) {
+                  return { data: record, error: null };
+                }
+              }
+              return { data: null, error: null };
+            }),
+          })),
           single: vi.fn(() => ({ data: { id: 'mapping-123' }, error: null })),
         })),
+        insert: vi.fn((data: any) => ({
+          select: vi.fn(() => ({
+            single: vi.fn(() => {
+              // Store the inserted data
+              const key = `${data.agentId}:${data.tool}:${data.contextKey}`;
+              const record = { ...data, id: 'mapping-123' };
+              dbStore.set(key, record);
+              return { data: record, error: null };
+            }),
+          })),
+        })),
+        update: vi.fn(() => ({
+          eq: vi.fn(() => ({ data: null, error: null })),
+        })),
+        delete: vi.fn(() => ({
+          eq: vi.fn((field: string, value: string) => ({
+            eq: vi.fn((field2: string, value2: string) => ({
+              eq: vi.fn((field3: string, value3: string) => {
+                // Find and delete matching record
+                for (const [key, record] of dbStore.entries()) {
+                  if (record[field] === value && record[field2] === value2 && record[field3] === value3) {
+                    dbStore.delete(key);
+                    break;
+                  }
+                }
+                return { data: null, error: null };
+              }),
+            })),
+          })),
+        })),
+        upsert: vi.fn((data: any, options?: any) => {
+          // Handle both single item and array
+          const items = Array.isArray(data) ? data : [data];
+          
+          // Store the upserted data
+          items.forEach((item, index) => {
+            const key = `${item.agentId}:${item.tool}:${item.contextKey}`;
+            dbStore.set(key, { ...item, id: item.id || `mapping-${index + 1}` });
+          });
+          
+          // Return an object that can handle both .select() and direct response
+          const result = {
+            data: items.map((item, index) => ({ id: item.id || `mapping-${index + 1}` })),
+            error: null
+          };
+          
+          return {
+            select: vi.fn(() => result),
+            ...result // Also return data/error directly for when .select() is not called
+          };
+        }),
       })),
-      update: vi.fn(() => ({
-        eq: vi.fn(() => ({ data: null, error: null })),
-      })),
-      delete: vi.fn(() => ({
-        eq: vi.fn(() => ({ data: null, error: null })),
-      })),
-      upsert: vi.fn(() => ({
-        select: vi.fn(() => ({ data: [{ id: 'mapping-123' }, { id: 'mapping-456' }], error: null })),
-      })),
-    })),
-  })),
-}));
+    }))
+  };
+});
 
 vi.mock('@upstash/redis', () => {
+  // Create a simple in-memory store for testing
+  const store = new Map<string, string>();
+  
   const mockRedisInstance = {
     get: vi.fn(async (key: string) => {
-      if (key.includes('context_map:agent-123:notion:project-123')) {
-        return 'external-123';
-      }
-      if (key.includes('context_map_rev:agent-123:notion:external-123')) {
-        return 'project-123';
-      }
-      return null;
+      return store.get(key) || null;
     }),
-    set: vi.fn(async () => 'OK'),
-    del: vi.fn(async () => 1),
+    set: vi.fn(async (key: string, value: string) => {
+      store.set(key, value);
+      return 'OK';
+    }),
+    del: vi.fn(async (key: string) => {
+      const existed = store.has(key);
+      store.delete(key);
+      return existed ? 1 : 0;
+    }),
     expire: vi.fn(async () => true),
   };
 
@@ -68,14 +173,29 @@ vi.mock('@upstash/redis', () => {
 describe('ContextMapper', () => {
   let contextMapper: ContextMapper;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset mocks
     vi.clearAllMocks();
+    
+    // Clear the mock database
+    dbStore.clear();
     
     // Create a fresh instance for each test
     contextMapper = ContextMapper.getInstance();
     // Clear mappings for isolation
     (contextMapper as any).mappings = new Map();
+    
+    // Add some test data to the mock database
+    await contextMapper.createMapping({
+      agentId: 'agent-123',
+      userId: 'user-123',
+      tool: 'notion',
+      contextKey: 'project-123',
+      externalId: 'external-123',
+      metadata: { name: 'Project X' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
   });
 
   afterEach(() => {

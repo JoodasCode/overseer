@@ -164,7 +164,15 @@ export async function POST(req: NextRequest) {
     }
     
     // Parse request body
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch (jsonError) {
+      return NextResponse.json(
+        { error: 'Invalid JSON format in request body' },
+        { status: 400 }
+      );
+    }
     const { title, description, priority, agent_id, due_date, metadata } = body;
     
     // Validate required fields

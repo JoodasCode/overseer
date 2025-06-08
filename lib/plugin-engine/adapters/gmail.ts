@@ -40,7 +40,10 @@ export class GmailAdapter implements Adapter {
       success: true,
       data: {
         messageId: 'mock-message-id',
-        sentAt: new Date().toISOString()
+        sentAt: new Date().toISOString(),
+        to,
+        subject,
+        body
       }
     };
   }

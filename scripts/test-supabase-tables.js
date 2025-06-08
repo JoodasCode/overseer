@@ -10,11 +10,11 @@ require('dotenv').config();
 
 // Get Supabase credentials from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; // Use service role key for admin operations
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌ Missing Supabase credentials in environment variables');
-  console.log('Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in your .env file');
+  console.log('Please ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in your .env file');
   process.exit(1);
 }
 
@@ -72,85 +72,33 @@ async function testTables() {
     
     // Create a test user
     console.log('\n🧪 Creating a test user...');
-    try {
-      const { data: existingUsers, error: findError } = await supabase
-        .from('User')
-        .select('id')
-        .eq('email', 'test@overseer.ai')
-        .limit(1);
-      
-      let userId;
-      
-      if (findError) {
-        console.error(`❌ Error checking for existing user: ${findError.message}`);
-      } else if (existingUsers && existingUsers.length > 0) {
-        userId = existingUsers[0].id;
-        console.log(`✅ Found existing test user: ${userId}`);
-      } else {
-        // Create new user
-        const { data: newUser, error: createError } = await supabase
-          .from('User')
-          .insert({
-            email: 'test@overseer.ai',
-            display_name: 'Test User',
-            avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=test',
-            preferences: { theme: 'dark', notifications: true }
-          })
-          .select();
-        
-        if (createError) {
-          console.error(`❌ Error creating test user: ${createError.message}`);
-        } else {
-          userId = newUser[0].id;
-          console.log(`✅ Created new test user: ${userId}`);
-        }
-      }
-      
-      // Create a test agent if we have a user ID
-      if (userId) {
-        console.log('\n🤖 Creating a test agent...');
-        
-        const { data: existingAgents, error: findAgentError } = await supabase
-          .from('Agent')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('name', 'Test Agent')
-          .limit(1);
-        
-        if (findAgentError) {
-          console.error(`❌ Error checking for existing agent: ${findAgentError.message}`);
-        } else if (existingAgents && existingAgents.length > 0) {
-          console.log(`✅ Found existing test agent: ${existingAgents[0].id}`);
-        } else {
-          // Create new agent
-          const { data: newAgent, error: createAgentError } = await supabase
-            .from('Agent')
-            .insert({
-              user_id: userId,
-              name: 'Test Agent',
-              description: 'A test agent for database connectivity verification',
-              tools: { enabled: ['web_search', 'calculator'] },
-              preferences: { model: 'gpt-4o', temperature: 0.7 }
-            })
-            .select();
-          
-          if (createAgentError) {
-            console.error(`❌ Error creating test agent: ${createAgentError.message}`);
-          } else {
-            console.log(`✅ Created new test agent: ${newAgent[0].id}`);
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`❌ Error creating test data: ${error.message}`);
+    const testUser = {
+      id: '00000000-0000-0000-0000-000000000000',
+      email: 'test@example.com',
+      role: 'user',
+      api_keys: [],
+      api_key_metadata: [],
+      preferences: {},
+      metadata: {}
+    };
+    
+    const { data: userData, error: userError } = await supabase
+      .from('User')
+      .upsert(testUser)
+      .select();
+    
+    if (userError) {
+      console.error(`❌ Error creating test user: ${userError.message}`);
+    } else {
+      console.log('✅ Test user created successfully');
+      console.log('User data:', userData);
     }
     
-    console.log('\n🎉 Supabase tables test completed!');
-    
   } catch (error) {
-    console.error('❌ Supabase connection failed:', error.message);
+    console.error('❌ Error:', error.message);
   }
+  
+  console.log('\n🎉 Supabase tables test completed!');
 }
 
-// Run the test
 testTables();

@@ -11,7 +11,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import Redis from 'ioredis';
+import { Redis } from '@upstash/redis';
 import { ErrorLog } from './types';
 
 // Mock Supabase client for development
@@ -44,11 +44,12 @@ const redis = process.env.NODE_ENV === 'development'
       get: async () => null,
       set: async () => 'OK',
       del: async () => 1,
+      incr: async () => 1,
+      expire: async () => 1,
     }
   : new Redis({
-      host: process.env.REDIS_HOST,
-      port: Number(process.env.REDIS_PORT),
-      password: process.env.REDIS_PASSWORD,
+      url: process.env.UPSTASH_REDIS_REST_URL || '',
+      token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
     });
 
 /**

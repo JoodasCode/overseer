@@ -6,7 +6,8 @@ export default defineConfig({
     environment: 'node',
     include: ['**/__tests__/**/*.test.ts'],
     exclude: ['node_modules'],
-    setupFiles: ['dotenv/config'],
+    setupFiles: ['dotenv/config', '__tests__/mocks/setup.ts', '__tests__/setup.ts'],
+    globals: true,
   },
   resolve: {
     alias: {

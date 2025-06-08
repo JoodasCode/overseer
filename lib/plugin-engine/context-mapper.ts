@@ -208,45 +208,7 @@ export class ContextMapper {
     return true;
   }
 
-  /**
-   * Delete a context mapping
-   * @param id Mapping ID
-   * @returns Success status
-   */
-  public async deleteMapping(id: string): Promise<boolean> {
-    // Get the mapping first to clear cache
-    const { data: mapping, error: fetchError } = await supabase
-      .from('context_mappings')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (fetchError || !mapping) {
-      console.error('Failed to fetch mapping for deletion:', fetchError);
-      return false;
-    }
-    
-    // Delete from Supabase
-    const { error } = await supabase
-      .from('context_mappings')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      console.error('Failed to delete context mapping:', error);
-      return false;
-    }
-    
-    // Clear from cache
-    const cacheKey = this.getCacheKey(mapping.agentId, mapping.tool, mapping.contextKey);
-    await redis.del(cacheKey);
-    
-    // Clear reverse lookup cache
-    const reverseCacheKey = this.getReverseCacheKey(mapping.agentId, mapping.tool, mapping.externalId);
-    await redis.del(reverseCacheKey);
-    
-    return true;
-  }
+
 
   /**
    * List all context mappings for an agent and tool
@@ -375,15 +337,72 @@ export class ContextMapper {
   }
 
   /**
-   * Bulk delete context mappings by agentId, tool, and contextKey
+   * Upsert a context mapping (create or update)
+   * @param mapping Context mapping object
+   * @returns Success status
    */
-  public async bulkDeleteMappings(keys: Array<{ agentId: string; tool: string; contextKey: string }>): Promise<number> {
-    if (!keys.length) return 0;
-    let deletedCount = 0;
-    for (const { agentId, tool, contextKey } of keys) {
+  public async upsertMapping(mapping: ContextMapping): Promise<boolean> {
+    try {
+      const now = new Date().toISOString();
+      const mappingData = {
+        ...mapping,
+        updatedAt: now
+      };
+
+      // Upsert to Supabase
+      const { error } = await supabase
+        .from('context_mappings')
+        .upsert(mappingData, {
+          onConflict: 'agentId,tool,contextKey',
+          ignoreDuplicates: false
+        });
+
+      if (error) {
+        console.error('Failed to upsert mapping:', error);
+        return false;
+      }
+
+      // Update cache
+      const cacheKey = this.getCacheKey(mapping.agentId, mapping.tool, mapping.contextKey);
+      const reverseCacheKey = this.getReverseCacheKey(mapping.agentId, mapping.tool, mapping.externalId);
+      
+      await Promise.all([
+        redis.set(cacheKey, mapping.externalId),
+        redis.set(reverseCacheKey, mapping.contextKey)
+      ]);
+
+      return true;
+    } catch (error) {
+      console.error('Failed to upsert mapping:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Delete a context mapping by agentId, tool, and contextKey
+   * @param agentId Agent ID
+   * @param tool Tool name
+   * @param contextKey Context key
+   * @returns Success status
+   */
+  public async deleteMapping(agentId: string, tool: string, contextKey: string): Promise<boolean>;
+  /**
+   * Delete a context mapping by ID
+   * @param id Mapping ID
+   * @returns Success status
+   */
+  public async deleteMapping(id: string): Promise<boolean>;
+  public async deleteMapping(agentIdOrId: string, tool?: string, contextKey?: string): Promise<boolean> {
+    if (tool && contextKey) {
+      // Delete by agentId, tool, contextKey
+      const agentId = agentIdOrId;
+      
       // Get mapping to find externalId for cache
       const mapping = await this.getMapping(agentId, tool, contextKey);
-      if (!mapping) continue;
+      if (!mapping) {
+        return false;
+      }
+
       // Delete from Supabase
       const { error } = await supabase
         .from('context_mappings')
@@ -391,16 +410,71 @@ export class ContextMapper {
         .eq('agentId', agentId)
         .eq('tool', tool)
         .eq('contextKey', contextKey);
+
       if (error) {
         console.error('Failed to delete mapping:', error);
-        continue;
+        return false;
       }
-      // Delete from Redis
+
+      // Clear from cache
       const cacheKey = this.getCacheKey(agentId, tool, contextKey);
       await redis.del(cacheKey);
+      
+      // Clear reverse lookup cache
       const reverseCacheKey = this.getReverseCacheKey(agentId, tool, mapping.externalId);
       await redis.del(reverseCacheKey);
-      deletedCount++;
+
+      return true;
+    } else {
+      // Delete by ID (original implementation)
+      const id = agentIdOrId;
+      
+      // Get the mapping first to clear cache
+      const { data: mapping, error: fetchError } = await supabase
+        .from('context_mappings')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError || !mapping) {
+        console.error('Failed to fetch mapping for deletion:', fetchError);
+        return false;
+      }
+      
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('context_mappings')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error('Failed to delete context mapping:', error);
+        return false;
+      }
+      
+      // Clear from cache
+      const cacheKey = this.getCacheKey(mapping.agentId, mapping.tool, mapping.contextKey);
+      await redis.del(cacheKey);
+      
+      // Clear reverse lookup cache
+      const reverseCacheKey = this.getReverseCacheKey(mapping.agentId, mapping.tool, mapping.externalId);
+      await redis.del(reverseCacheKey);
+      
+      return true;
+    }
+  }
+
+  /**
+   * Bulk delete context mappings by agentId, tool, and contextKey
+   */
+  public async bulkDeleteMappings(keys: Array<{ agentId: string; tool: string; contextKey: string }>): Promise<number> {
+    if (!keys.length) return 0;
+    let deletedCount = 0;
+    for (const { agentId, tool, contextKey } of keys) {
+      const success = await this.deleteMapping(agentId, tool, contextKey);
+      if (success) {
+        deletedCount++;
+      }
     }
     return deletedCount;
   }

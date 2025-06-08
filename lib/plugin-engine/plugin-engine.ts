@@ -9,7 +9,7 @@ import { Scheduler } from './scheduler';
 import { ErrorHandler } from './error-handler';
 import { IntegrationManager } from './integration-manager';
 import { BaseAdapter } from './adapters/base-adapter';
-import { TrelloAdapter } from './adapters/trello-adapter';
+// import { TrelloAdapter } from './adapters/trello-adapter'; // Not implemented yet
 import { AsanaAdapter } from './adapters/asana-adapter';
 import { PluginAdapter, TaskIntent, ScheduledTask, PluginResult, ErrorLog } from './types';
 
@@ -85,6 +85,18 @@ export class PluginEngine {
    * Process an intent with the appropriate adapter
    */
   public async processIntent(intent: TaskIntent): Promise<PluginResult> {
+    // If this is a scheduled task, handle it differently
+    if (intent.scheduledTime) {
+      return await this.scheduleTask(intent);
+    }
+
+    return await this.executeTask(intent);
+  }
+
+  /**
+   * Execute a task immediately
+   */
+  private async executeTask(intent: TaskIntent): Promise<PluginResult> {
     const adapter = this.getAdapter(intent.tool);
 
     if (!adapter) {
@@ -108,10 +120,15 @@ export class PluginEngine {
 
     try {
       // Process the intent based on the action
-      if (intent.intent === 'send') {
-        return await adapter.send(intent.agentId, intent.context);
-      } else if (intent.intent === 'fetch') {
+      if (intent.intent === 'fetch' || intent.intent.startsWith('fetch_') || 
+          intent.intent.startsWith('get_') || intent.intent.startsWith('list_') || 
+          intent.intent.startsWith('search_')) {
         return await adapter.fetch(intent.agentId, intent.context);
+      } else if (intent.intent === 'send' || intent.intent.startsWith('send_') ||
+                 intent.intent.startsWith('create_') || intent.intent.startsWith('update_') ||
+                 intent.intent.startsWith('delete_') || intent.intent.startsWith('post_') ||
+                 intent.intent === 'test_intent') {
+        return await adapter.send(intent.agentId, intent.context);
       } else {
         return {
           success: false,
@@ -150,126 +167,24 @@ export class PluginEngine {
   }
 
   /**
-   * Execute a task immediately
-   */
-  private async executeTask(intent: TaskIntent): Promise<PluginResult> {
-    const { tool, agentId, userId } = intent;
-    const adapter = this.adapters.get(tool);
-
-    if (!adapter) {
-      throw new Error(`No adapter found for tool: ${tool}`);
-    }
-
-    // Check if the user has connected this tool
-    const isConnected = await adapter.isConnected(userId);
-    if (!isConnected) {
-      return {
-        success: false,
-        message: `Tool ${tool} is not connected for this user`,
-        error: {
-          code: 'TOOL_NOT_CONNECTED',
-          message: `Please connect ${tool} before using it`
-        }
-      };
-    }
-
-    // Normalize context for the adapter
-    const normalizedContext = this.normalizeContext(intent);
-
-    // Execute the appropriate method based on intent type
-    // For now we'll use a simple convention: send for write operations, fetch for read operations
-    const isReadOperation = intent.intent.startsWith('get_') || 
-                           intent.intent.startsWith('fetch_') || 
-                           intent.intent.startsWith('list_') ||
-                           intent.intent.startsWith('search_');
-
-    try {
-      let result: PluginResult;
-      
-      if (isReadOperation) {
-        result = await adapter.fetch(agentId, normalizedContext);
-      } else {
-        result = await adapter.send(agentId, normalizedContext);
-      }
-
-      // Cache successful results
-      if (result.success) {
-        await this.cacheResult(intent, result);
-      }
-
-      return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      await this.logError({
-        agentId,
-        userId,
-        tool,
-        action: intent.intent,
-        errorCode: 'EXECUTE_TASK_ERROR',
-        errorMessage,
-        payload: intent.context,
-        timestamp: new Date().toISOString(),
-        resolved: false
-      });
-      
-      return {
-        success: false,
-        message: `Failed to execute task: ${errorMessage}`,
-        error: {
-          code: 'EXECUTE_TASK_ERROR',
-          message: errorMessage
-        }
-      };
-    }
-  }
-
-  /**
    * Schedule a task for later execution
    */
   private async scheduleTask(intent: TaskIntent): Promise<PluginResult> {
-    const { agentId, userId, tool, intent: action, context, scheduledTime } = intent;
-    
-    if (!scheduledTime) {
-      throw new Error('No scheduled time provided');
+    try {
+      const taskId = await this.scheduler.scheduleTask(intent);
+      return {
+        success: true,
+        message: `Task scheduled successfully with ID: ${taskId}`,
+        data: { taskId, scheduledTime: intent.scheduledTime }
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return {
+        success: false,
+        message: `Failed to schedule task: ${errorMessage}`,
+        data: null
+      };
     }
-
-    const task: Omit<ScheduledTask, 'id' | 'createdAt' | 'updatedAt'> = {
-      agentId,
-      userId,
-      tool,
-      action,
-      payload: context,
-      executeAt: scheduledTime,
-      status: 'scheduled',
-      attempts: 0
-    };
-
-    // Store in Supabase
-    const { data, error } = await supabase
-      .from('scheduled_tasks')
-      .insert(task)
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to schedule task: ${error.message}`);
-    }
-
-    // Also store in Redis for quick lookup
-    const taskId = data.id;
-    await redis.set(`scheduled_task:${taskId}`, JSON.stringify(data), {
-      ex: this.getSecondsUntil(scheduledTime)
-    });
-
-    return {
-      success: true,
-      message: `Task scheduled for ${scheduledTime}`,
-      externalId: taskId,
-      metadata: {
-        scheduledTime,
-        taskId
-      }
-    };
   }
 
   /**

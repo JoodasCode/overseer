@@ -76,8 +76,16 @@ export async function POST(req: NextRequest) {
     }
     
     // Parse request body
-    const body = await req.json();
-    const { name, description, nodes, status } = body;
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      return NextResponse.json(
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
+    const { name, description, nodes, status, agent_id } = body;
     
     // Validate required fields
     if (!name || !nodes) {
@@ -85,6 +93,21 @@ export async function POST(req: NextRequest) {
         { error: 'Missing required fields' },
         { status: 400 }
       );
+    }
+    
+    // Get or create default agent for user if agent_id not provided
+    let finalAgentId = agent_id;
+    if (!finalAgentId) {
+      const defaultAgent = await prisma.agent.findFirst({
+        where: { user_id: user.id }
+      });
+      if (!defaultAgent) {
+        return NextResponse.json(
+          { error: 'No agent found for user' },
+          { status: 400 }
+        );
+      }
+      finalAgentId = defaultAgent.id;
     }
     
     // Validate nodes structure (basic validation)
@@ -104,6 +127,7 @@ export async function POST(req: NextRequest) {
           config: { nodes }, // Store nodes in config field as JSON
           status: status || 'draft',
           user_id: user.id,
+          agent_id: finalAgentId,
           created_at: new Date(),
           updated_at: new Date()
         }

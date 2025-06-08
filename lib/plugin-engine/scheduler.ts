@@ -6,7 +6,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Redis } from '@upstash/redis';
 import { ScheduledTask, TaskIntent } from './types';
-import { PluginEngine } from './plugin-engine';
+// Removed circular import - will use dynamic import when needed
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -21,11 +21,9 @@ const redis = new Redis({
 
 export class Scheduler {
   private static instance: Scheduler;
-  private pluginEngine: PluginEngine;
 
   private constructor() {
     // Private constructor for singleton pattern
-    this.pluginEngine = PluginEngine.getInstance();
   }
 
   /**
@@ -115,14 +113,14 @@ export class Scheduler {
       return false;
     }
     
-    // Update in Supabase
-    const { error } = await supabase
-      .from('scheduled_tasks')
-      .update({ 
-        status: 'cancelled',
-        updatedAt: new Date().toISOString()
-      })
-      .eq('id', taskId);
+          // Update in Supabase
+      const { error } = await supabase
+        .from('scheduled_tasks')
+        .update({ 
+          status: 'cancelled',
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', taskId);
     
     if (error) {
       throw new Error(`Failed to cancel task: ${error.message}`);
@@ -181,8 +179,10 @@ export class Scheduler {
           context: task.payload
         };
         
-        // Execute the task
-        const result = await this.pluginEngine.processIntent(intent);
+        // Execute the task using dynamic import to avoid circular dependency
+        const { PluginEngine } = await import('./plugin-engine');
+        const pluginEngine = PluginEngine.getInstance();
+        const result = await pluginEngine.processIntent(intent);
         
         // Update task with result
         await supabase

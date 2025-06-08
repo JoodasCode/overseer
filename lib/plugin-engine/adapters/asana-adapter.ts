@@ -300,7 +300,7 @@ export class AsanaAdapter extends BaseAdapter {
         message: 'Task created successfully',
         externalId: taskId,
         data: {
-          id: taskId,
+          gid: taskId,
           name,
           notes,
           projectId,
@@ -367,7 +367,7 @@ export class AsanaAdapter extends BaseAdapter {
         message: 'Task updated successfully',
         externalId: taskId,
         data: {
-          id: taskId,
+          gid: taskId,
           ...updateData,
           updatedAt: new Date().toISOString()
         }

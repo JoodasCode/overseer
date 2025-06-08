@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Create mock functions using vi.hoisted to ensure they're defined before mocks are hoisted
 const mockGetUser = vi.hoisted(() => vi.fn());
-const mockFindMany = vi.hoisted(() => vi.fn());
-const mockCreate = vi.hoisted(() => vi.fn());
+const mockWorkflowFindMany = vi.hoisted(() => vi.fn());
+const mockWorkflowCreate = vi.hoisted(() => vi.fn());
+const mockAgentFindFirst = vi.hoisted(() => vi.fn());
 
 // Setup mocks before importing any modules
 vi.mock('@/lib/supabase-client', () => ({
@@ -18,8 +19,11 @@ vi.mock('@/lib/supabase-client', () => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     workflow: {
-      findMany: mockFindMany,
-      create: mockCreate
+      findMany: mockWorkflowFindMany,
+      create: mockWorkflowCreate
+    },
+    agent: {
+      findFirst: mockAgentFindFirst
     }
   }
 }));
@@ -37,6 +41,13 @@ describe('Workflows API Routes', () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'test-user-id' } },
       error: null
+    });
+    
+    // Setup default agent mock
+    mockAgentFindFirst.mockResolvedValue({
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      name: 'Default Agent',
+      user_id: 'test-user-id'
     });
     
     // Create mock request
@@ -63,7 +74,7 @@ describe('Workflows API Routes', () => {
         }
       ];
       
-      mockFindMany.mockResolvedValue(mockWorkflows);
+      mockWorkflowFindMany.mockResolvedValue(mockWorkflows);
       
       // Call the API handler
       const response = await GET(mockRequest);
@@ -76,7 +87,7 @@ describe('Workflows API Routes', () => {
       expect(responseData.workflows).toEqual(mockWorkflows);
       
       // Verify Prisma calls
-      expect(mockFindMany).toHaveBeenCalledWith({
+      expect(mockWorkflowFindMany).toHaveBeenCalledWith({
         where: {
           user_id: 'test-user-id'
         },
@@ -104,7 +115,7 @@ describe('Workflows API Routes', () => {
         }
       ];
       
-      mockFindMany.mockResolvedValue(mockWorkflows);
+      mockWorkflowFindMany.mockResolvedValue(mockWorkflows);
       
       // Call the API handler
       const response = await GET(mockRequest);
@@ -117,7 +128,7 @@ describe('Workflows API Routes', () => {
       expect(responseData.workflows).toEqual(mockWorkflows);
       
       // Verify Prisma calls with status filter
-      expect(mockFindMany).toHaveBeenCalledWith({
+      expect(mockWorkflowFindMany).toHaveBeenCalledWith({
         where: {
           user_id: 'test-user-id',
           status: 'active'
@@ -147,7 +158,7 @@ describe('Workflows API Routes', () => {
     
     it('should return 500 if database operation fails', async () => {
       // Mock Prisma error
-      mockFindMany.mockRejectedValue(new Error('Database error'));
+      mockWorkflowFindMany.mockRejectedValue(new Error('Database error'));
       
       // Call the API handler
       const response = await GET(mockRequest);
@@ -195,7 +206,7 @@ describe('Workflows API Routes', () => {
         updated_at: new Date().toISOString()
       };
       
-      mockCreate.mockResolvedValue(mockCreatedWorkflow);
+      mockWorkflowCreate.mockResolvedValue(mockCreatedWorkflow);
       
       // Call the API handler
       const response = await POST(mockRequest);
@@ -208,13 +219,14 @@ describe('Workflows API Routes', () => {
       expect(responseData.workflow).toEqual(mockCreatedWorkflow);
       
       // Verify Prisma calls
-      expect(mockCreate).toHaveBeenCalledWith({
+      expect(mockWorkflowCreate).toHaveBeenCalledWith({
         data: {
           name: requestBody.name,
           description: requestBody.description,
           config: { nodes: requestBody.nodes },
           status: requestBody.status,
           user_id: 'test-user-id',
+          agent_id: '550e8400-e29b-41d4-a716-446655440000',
           created_at: expect.any(Date),
           updated_at: expect.any(Date)
         }
@@ -326,7 +338,7 @@ describe('Workflows API Routes', () => {
       );
       
       // Mock Prisma error
-      mockCreate.mockRejectedValue(new Error('Database error'));
+      mockWorkflowCreate.mockRejectedValue(new Error('Database error'));
       
       // Call the API handler
       const response = await POST(mockRequest);

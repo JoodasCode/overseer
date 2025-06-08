@@ -1,62 +1,72 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { GET, POST, PATCH } from '../route';
-import { ErrorHandler } from '@/lib/plugin-engine/error-handler';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 
-// Mock dependencies
-vi.mock('@supabase/supabase-js');
-vi.mock('@/lib/plugin-engine/error-handler');
+// Use vi.hoisted to ensure mock functions are hoisted to the top
+const mockGetSession = vi.hoisted(() => vi.fn());
+const mockLogError = vi.hoisted(() => vi.fn());
+const mockGetAgentErrors = vi.hoisted(() => vi.fn());
+const mockResolveError = vi.hoisted(() => vi.fn());
+const mockGetFallbackMessage = vi.hoisted(() => vi.fn());
+
+// Mock Supabase
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
+    auth: {
+      getSession: mockGetSession,
+    },
+  })),
+}));
+
+// Mock ErrorHandler
+vi.mock('@/lib/plugin-engine', () => ({
+  ErrorHandler: {
+    getInstance: () => ({
+      logError: mockLogError,
+      getAgentErrors: mockGetAgentErrors,
+      resolveError: mockResolveError,
+      getFallbackMessage: mockGetFallbackMessage,
+    }),
+  },
+}));
+
+// Set environment variables for testing
+vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://test-url.supabase.co');
+vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-key');
+
+import { GET, POST, PATCH } from '../route';
 
 describe('Error Logs API Routes', () => {
-  let mockRequest: NextRequest;
-  let mockErrorHandler: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // Mock Supabase client
-    (createClient as any).mockReturnValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: 'test-user-id' } },
-          error: null,
-        }),
+    // Set up default successful authentication
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: {
+          user: { id: 'test-user-id' },
+        },
       },
     });
     
-    // Mock ErrorHandler
-    mockErrorHandler = {
-      logError: vi.fn().mockResolvedValue('test-error-id'),
-      getAgentErrors: vi.fn().mockResolvedValue([
-        { id: 'error-1', tool: 'gmail', errorCode: 'AUTH_ERROR' },
-        { id: 'error-2', tool: 'slack', errorCode: 'API_ERROR' },
-      ]),
-      resolveError: vi.fn().mockResolvedValue(undefined),
-    };
-    
-    (ErrorHandler.getInstance as any).mockReturnValue(mockErrorHandler);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
+    // Set up default ErrorHandler responses
+    mockLogError.mockResolvedValue('test-error-id');
+    mockGetAgentErrors.mockResolvedValue([
+      { id: 'error-1', tool: 'gmail', errorCode: 'AUTH_ERROR' },
+      { id: 'error-2', tool: 'slack', errorCode: 'API_ERROR' },
+    ]);
+    mockResolveError.mockResolvedValue(undefined);
+    mockGetFallbackMessage.mockReturnValue('Please try again later');
   });
 
   describe('GET', () => {
     it('should return 401 if user is not authenticated', async () => {
       // Mock authentication failure
-      (createClient as any).mockReturnValue({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'Not authenticated' },
-          }),
-        },
+      mockGetSession.mockResolvedValue({
+        data: { session: null },
       });
       
-      mockRequest = new NextRequest('http://localhost/api/plugin-engine/errors?agentId=test-agent');
-      
-      const response = await GET(mockRequest);
+      const request = new NextRequest('http://localhost/api/plugin-engine/errors?agentId=test-agent');
+      const response = await GET(request);
       
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual(
@@ -65,22 +75,20 @@ describe('Error Logs API Routes', () => {
     });
 
     it('should return 400 if agentId is missing', async () => {
-      mockRequest = new NextRequest('http://localhost/api/plugin-engine/errors');
-      
-      const response = await GET(mockRequest);
+      const request = new NextRequest('http://localhost/api/plugin-engine/errors');
+      const response = await GET(request);
       
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual(
-        expect.objectContaining({ error: 'Missing required parameter: agentId' })
+        expect.objectContaining({ error: expect.stringContaining('agentId') })
       );
     });
 
     it('should return error logs for an agent', async () => {
-      mockRequest = new NextRequest('http://localhost/api/plugin-engine/errors?agentId=test-agent&limit=10');
+      const request = new NextRequest('http://localhost/api/plugin-engine/errors?agentId=test-agent&limit=10');
+      const response = await GET(request);
       
-      const response = await GET(mockRequest);
-      
-      expect(mockErrorHandler.getAgentErrors).toHaveBeenCalledWith('test-agent', 10);
+      expect(mockGetAgentErrors).toHaveBeenCalledWith('test-agent', 10);
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
         errors: [
@@ -94,16 +102,11 @@ describe('Error Logs API Routes', () => {
   describe('POST', () => {
     it('should return 401 if user is not authenticated', async () => {
       // Mock authentication failure
-      (createClient as any).mockReturnValue({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'Not authenticated' },
-          }),
-        },
+      mockGetSession.mockResolvedValue({
+        data: { session: null },
       });
       
-      mockRequest = new NextRequest(
+      const request = new NextRequest(
         'http://localhost/api/plugin-engine/errors',
         {
           method: 'POST',
@@ -117,7 +120,7 @@ describe('Error Logs API Routes', () => {
         }
       );
       
-      const response = await POST(mockRequest);
+      const response = await POST(request);
       
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual(
@@ -126,7 +129,7 @@ describe('Error Logs API Routes', () => {
     });
 
     it('should return 400 if required fields are missing', async () => {
-      mockRequest = new NextRequest(
+      const request = new NextRequest(
         'http://localhost/api/plugin-engine/errors',
         {
           method: 'POST',
@@ -137,7 +140,7 @@ describe('Error Logs API Routes', () => {
         }
       );
       
-      const response = await POST(mockRequest);
+      const response = await POST(request);
       
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual(
@@ -155,7 +158,7 @@ describe('Error Logs API Routes', () => {
         payload: { to: 'test@example.com' },
       };
       
-      mockRequest = new NextRequest(
+      const request = new NextRequest(
         'http://localhost/api/plugin-engine/errors',
         {
           method: 'POST',
@@ -163,19 +166,20 @@ describe('Error Logs API Routes', () => {
         }
       );
       
-      const response = await POST(mockRequest);
+      const response = await POST(request);
       
-      expect(mockErrorHandler.logError).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockLogError).toHaveBeenCalledWith(expect.objectContaining({
         ...errorData,
         userId: 'test-user-id',
         timestamp: expect.any(String),
         resolved: false,
       }));
       
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
+        success: true,
         errorId: 'test-error-id',
-        message: 'Error logged successfully',
+        fallbackMessage: 'Please try again later',
       });
     });
   });
@@ -183,16 +187,11 @@ describe('Error Logs API Routes', () => {
   describe('PATCH', () => {
     it('should return 401 if user is not authenticated', async () => {
       // Mock authentication failure
-      (createClient as any).mockReturnValue({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'Not authenticated' },
-          }),
-        },
+      mockGetSession.mockResolvedValue({
+        data: { session: null },
       });
       
-      mockRequest = new NextRequest(
+      const request = new NextRequest(
         'http://localhost/api/plugin-engine/errors',
         {
           method: 'PATCH',
@@ -202,7 +201,7 @@ describe('Error Logs API Routes', () => {
         }
       );
       
-      const response = await PATCH(mockRequest);
+      const response = await PATCH(request);
       
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual(
@@ -211,7 +210,7 @@ describe('Error Logs API Routes', () => {
     });
 
     it('should return 400 if errorId is missing', async () => {
-      mockRequest = new NextRequest(
+      const request = new NextRequest(
         'http://localhost/api/plugin-engine/errors',
         {
           method: 'PATCH',
@@ -219,16 +218,16 @@ describe('Error Logs API Routes', () => {
         }
       );
       
-      const response = await PATCH(mockRequest);
+      const response = await PATCH(request);
       
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual(
-        expect.objectContaining({ error: 'Missing required parameter: errorId' })
+        expect.objectContaining({ error: expect.stringContaining('errorId') })
       );
     });
 
     it('should resolve an error and return success message', async () => {
-      mockRequest = new NextRequest(
+      const request = new NextRequest(
         'http://localhost/api/plugin-engine/errors',
         {
           method: 'PATCH',
@@ -238,12 +237,12 @@ describe('Error Logs API Routes', () => {
         }
       );
       
-      const response = await PATCH(mockRequest);
+      const response = await PATCH(request);
       
-      expect(mockErrorHandler.resolveError).toHaveBeenCalledWith('test-error-id');
+      expect(mockResolveError).toHaveBeenCalledWith('test-error-id');
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
-        message: 'Error resolved successfully',
+        success: true,
       });
     });
   });

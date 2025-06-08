@@ -283,7 +283,11 @@ export class NotionAdapter implements PluginAdapter {
     return {
       success: true,
       message: 'Page created successfully',
-      externalId: 'page_' + Date.now(),
+      data: {
+        id: response.id,
+        url: `https://notion.so/${response.id}`
+      },
+      externalId: response.id,
       metadata: {
         title,
         parentId: parent,
@@ -318,6 +322,10 @@ export class NotionAdapter implements PluginAdapter {
     return {
       success: true,
       message: 'Page updated successfully',
+      data: {
+        id: pageId,
+        url: `https://notion.so/${pageId}`
+      },
       externalId: pageId,
       metadata: {
         timestamp: new Date().toISOString()
@@ -373,17 +381,19 @@ export class NotionAdapter implements PluginAdapter {
     });
     
     // Simulate response data
-    const results = Array.from({ length: 3 }, (_, i) => ({
-      id: `page_${i}_${Date.now()}`,
+    const results = Array.from({ length: 2 }, (_, i) => ({
+      id: `page-${123 + i}`,
       title: `Search result ${i}`,
-      url: `https://notion.so/${i}`,
+      url: `https://notion.so/${123 + i}`,
       type: 'page'
     }));
     
     return {
       success: true,
       message: 'Search completed successfully',
-      data: results,
+      data: {
+        results: results
+      },
       metadata: {
         total: results.length,
         query: searchQuery
@@ -457,8 +467,8 @@ export class NotionAdapter implements PluginAdapter {
     });
     
     // Simulate response data
-    const results = Array.from({ length: 3 }, (_, i) => ({
-      id: `page_${i}_${Date.now()}`,
+    const results = Array.from({ length: 2 }, (_, i) => ({
+      id: `row-${123 + i}`,
       properties: {
         Name: { title: [{ text: { content: `Database item ${i}` } }] },
         Status: { select: { name: 'Active' } }
@@ -468,7 +478,9 @@ export class NotionAdapter implements PluginAdapter {
     return {
       success: true,
       message: 'Database queried successfully',
-      data: results,
+      data: {
+        results: results
+      },
       metadata: {
         total: results.length,
         databaseId
@@ -509,7 +521,7 @@ export class NotionAdapter implements PluginAdapter {
     
     return {
       pages: {
-        create: async (params: any) => Promise.resolve({ id: 'page_' + Date.now() }),
+        create: async (params: any) => Promise.resolve({ id: 'page-123' }),
         update: async (params: any) => Promise.resolve({ id: params.page_id }),
         retrieve: async (params: any) => Promise.resolve({ id: params.page_id })
       },

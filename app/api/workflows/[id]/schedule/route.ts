@@ -219,10 +219,16 @@ export async function PATCH(
         return createErrorResponse('Workflow not found', 404);
       }
       
-      // Perform the requested action
+      // Validate workflow status for the requested action
       if (action === 'pause') {
+        if (workflow.status !== WorkflowStatus.ACTIVE) {
+          return createErrorResponse('Cannot pause workflow that is not active', 400);
+        }
         await pauseScheduledWorkflow(workflowId);
-      } else {
+      } else if (action === 'resume') {
+        if (workflow.status !== WorkflowStatus.DRAFT) {
+          return createErrorResponse('Cannot resume workflow that is not paused', 400);
+        }
         await resumeScheduledWorkflow(workflowId);
       }
       

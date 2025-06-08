@@ -374,10 +374,7 @@ export async function DELETE(
         },
       });
       
-      return NextResponse.json({ 
-        success: true,
-        message: 'Task deleted successfully' 
-      });
+      return new NextResponse(null, { status: 204 });
     } catch (dbError) {
       console.error('Database error deleting task:', dbError);
       return NextResponse.json(
