@@ -17,38 +17,66 @@ interface HireAgentModalProps {
 }
 
 const availableAgents = [
+  // Core Communications Department Templates Only
   {
-    id: "alex",
+    id: "alex-comms",
     name: "Alex",
-    role: "Content Creator",
-    defaultAvatar: "✍️",
-    persona: "Creative, storytelling-focused, brand-aware",
-    tools: ["Figma", "Canva", "YouTube", "TikTok"],
-    specialty: "Visual content & video editing",
+    role: "Lead Communications Strategist",
+    defaultAvatar: "🧑‍💼",
+    persona: "Calm, articulate, and tactically creative. Thinks long-term. Speaks with clarity and structure.",
+    tools: ["Notion", "Gmail", "Google Calendar", "Slack"],
+    specialty: "Campaign planning & strategic coordination",
     level: 1,
-    description: "Alex turns ideas into viral content. Perfect for social media campaigns and brand storytelling.",
+    description: "Strategic communications leader who coordinates campaigns and delegates tasks with calm authority.",
+    department: "communications",
   },
   {
-    id: "sam",
-    name: "Sam",
-    role: "Data Analyst",
-    defaultAvatar: "📊",
-    persona: "Analytical, detail-oriented, insight-driven",
-    tools: ["Google Analytics", "Tableau", "SQL", "Python"],
-    specialty: "Performance tracking & insights",
+    id: "dana-comms",
+    name: "Dana",
+    role: "Visual Communications Assistant",
+    defaultAvatar: "👽",
+    persona: "Quirky, visual, expressive. Uses emojis and fast, enthusiastic language.",
+    tools: ["Canva", "Figma", "Slack"],
+    specialty: "Visual content creation & design",
     level: 1,
-    description: "Sam finds patterns in chaos. Turns your data into actionable business intelligence.",
+    description: "Creative visual assistant who designs engaging content with quirky, expressive energy.",
+    department: "communications",
   },
   {
-    id: "riley",
+    id: "jamie-comms",
+    name: "Jamie",
+    role: "Internal Communications Liaison",
+    defaultAvatar: "🛸",
+    persona: "Friendly, empathetic, diplomatic. Prioritizes team morale and clarity.",
+    tools: ["Slack", "Gmail", "Notion"],
+    specialty: "Internal communications & team morale",
+    level: 1,
+    description: "Internal liaison who maintains team morale and clarity with empathetic, diplomatic communication.",
+    department: "communications",
+  },
+  {
+    id: "riley-comms",
     name: "Riley",
-    role: "Customer Success",
-    defaultAvatar: "🤝",
-    persona: "Empathetic, solution-focused, relationship-builder",
-    tools: ["Intercom", "Zendesk", "Slack", "HubSpot"],
-    specialty: "Customer retention & support",
+    role: "Data-Driven PR Analyst",
+    defaultAvatar: "🤖",
+    persona: "Analytical, precise, neutral tone. Speaks with graphs and impact metrics.",
+    tools: ["Google Sheets", "Analytics"],
+    specialty: "PR analytics & performance tracking",
     level: 1,
-    description: "Riley keeps customers happy and coming back. Your secret weapon for retention.",
+    description: "Analytical expert who tracks metrics and performance with data-driven precision.",
+    department: "communications",
+  },
+  {
+    id: "toby-comms",
+    name: "Toby",
+    role: "Reactive Support Coordinator",
+    defaultAvatar: "👨‍🚀",
+    persona: "Quick-thinking, slightly anxious but extremely thorough. Speaks fast but factually.",
+    tools: ["Slack", "Gmail", "Discord"],
+    specialty: "Crisis management & rapid response",
+    level: 1,
+    description: "Rapid response coordinator for crisis management who thinks quickly and responds thoroughly.",
+    department: "communications",
   },
 ]
 
@@ -198,8 +226,8 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl border-pixel">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] border-pixel overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="font-pixel text-center text-lg">
             {step === "select" ? "CHOOSE YOUR AGENT" : "CUSTOMIZE YOUR AGENT"}
           </DialogTitle>
@@ -209,7 +237,7 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
         </DialogHeader>
 
         {step === "select" && (
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
             {availableAgents.map((agent) => (
               <Card
                 key={agent.id}
@@ -254,7 +282,7 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
               </Card>
             ))}
 
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 flex-shrink-0 pt-4 border-t mt-4">
               <Button variant="outline" onClick={handleClose} className="flex-1 font-pixel text-xs">
                 Cancel
               </Button>
@@ -267,7 +295,7 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
         )}
 
         {step === "customize" && currentAgent && (
-          <div className="space-y-6">
+          <div className="space-y-6 overflow-y-auto flex-1">
             <div className="text-center">
               <h3 className="font-pixel text-lg">{currentAgent.name}</h3>
               <p className="text-sm text-muted-foreground">{currentAgent.role}</p>
@@ -287,7 +315,7 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
               </div>
             </div>
 
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 flex-shrink-0 pt-4 border-t mt-4">
               <Button variant="outline" onClick={handleBack} className="flex-1 font-pixel text-xs">
                 <ChevronLeft className="w-3 h-3 mr-1" />
                 Back

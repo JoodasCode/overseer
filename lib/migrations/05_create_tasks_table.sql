@@ -4,9 +4,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
-  description TEXT,
+  details TEXT,
   status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'in_progress', 'completed', 'cancelled'
   priority TEXT NOT NULL DEFAULT 'medium', -- 'low', 'medium', 'high', 'urgent'
+  category TEXT DEFAULT 'General',
+  xp_reward INTEGER DEFAULT 20,
   due_date TIMESTAMP WITH TIME ZONE,
   completion_date TIMESTAMP WITH TIME ZONE,
   metadata JSONB DEFAULT '{}',
@@ -35,3 +37,4 @@ CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_agent_id ON tasks(agent_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);

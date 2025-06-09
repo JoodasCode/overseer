@@ -188,6 +188,41 @@ export async function POST(req: NextRequest) {
     
     // Create new agent using Supabase
     try {
+      // PHASE 1C FIX: Ensure user exists in User table before creating agent
+      console.log('🔍 Checking if user exists in database:', user.id);
+      
+      // First, check if user exists in User table
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from('User')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
+      // If user doesn't exist, create them first
+      if (!existingUser || userCheckError) {
+        console.log('👤 Creating user in database:', user.email);
+        const { error: userCreateError } = await supabase
+          .from('User')
+          .insert({
+            id: user.id,
+            email: user.email,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (userCreateError) {
+          console.error('❌ Failed to create user:', userCreateError.message);
+          // If user creation fails, it might be due to duplicate key, which is OK
+          // Continue with agent creation as the user might already exist
+        } else {
+          console.log('✅ User created successfully');
+        }
+      } else {
+        console.log('✅ User already exists in database');
+      }
+
+      // Now create the agent
+      console.log('🤖 Creating agent for user:', user.id);
       const { data: agent, error: agentError } = await supabase
         .from('Agent')
         .insert({
@@ -206,25 +241,23 @@ export async function POST(req: NextRequest) {
         throw new Error(`Agent creation failed: ${agentError.message}`);
       }
       
-      // Create initial agent memory
+      console.log('✅ Agent created successfully:', agent.id);
+      
+      // Create initial agent memory using correct table name
       const { error: memoryError } = await supabase
-        .from('AgentMemory')
+        .from('agent_memory')
         .insert({
           agent_id: agent.id,
-          key: 'system_prompt',
-          value: 'I am a helpful AI assistant.',
-          type: 'string',
-          embedding: [], // Empty array for now
-          metadata: {
-            importance: 10,
-            category: 'system',
-            goals: ['Learn about my user and be helpful']
-          },
+          weekly_goals: 'Help user achieve their goals',
+          preferences: ['Be helpful and friendly'],
+          recent_learnings: ['User just created me']
         });
 
       if (memoryError) {
-        console.warn('Failed to create initial agent memory:', memoryError.message);
+        console.warn('⚠️ Failed to create initial agent memory:', memoryError.message);
         // Don't fail the agent creation if memory creation fails
+      } else {
+        console.log('✅ Agent memory initialized');
       }
       
       return NextResponse.json({ agent }, { status: 201 });

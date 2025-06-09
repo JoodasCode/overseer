@@ -32,4 +32,5 @@ export function getStorageService(): StorageService {
 export * from './types';
 export * from './storage-service';
 export * from './s3-provider';
+export * from './supabase-provider';
 export * from './config';

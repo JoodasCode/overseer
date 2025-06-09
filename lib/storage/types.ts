@@ -7,6 +7,7 @@
 export enum StorageProvider {
   LOCAL = 'local',
   S3 = 's3',
+  SUPABASE = 'supabase',
   // Add more providers as needed
 }
 
@@ -19,6 +20,9 @@ export interface StorageConfig {
   secretAccessKey?: string;
   localPath?: string;
   maxSizeBytes?: number;
+  // Supabase Storage configuration
+  supabaseUrl?: string;
+  supabaseKey?: string;
 }
 
 export interface FileMetadata {

@@ -1,150 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { supabase } from '@/lib/supabase-client';
-import { TaskPriority, TaskStatus } from '@prisma/client';
-import { emitEvent } from '@/lib/realtime/event-emitter';
+import { createClient } from '@supabase/supabase-js';
 
-// Define options for pagination
-interface PaginationOptions {
-  page?: number;
-  limit?: number;
+// Get user from request headers
+async function getAuthenticatedUser(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  return error ? null : user;
 }
 
 /**
  * GET /api/tasks
- * Retrieve all tasks for the authenticated user with filtering and pagination
+ * Retrieve all tasks for the authenticated user
  */
 export async function GET(req: NextRequest) {
   try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser(req);
     
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json(
-        { error: 'Unauthorized', details: authError?.message },
+        { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    // Parse query parameters
-    const url = new URL(req.url);
-    const status = url.searchParams.get('status') as TaskStatus | null;
-    const priority = url.searchParams.get('priority') as TaskPriority | null;
-    const agentId = url.searchParams.get('agent_id');
-    const page = parseInt(url.searchParams.get('page') || '1', 10);
-    const limit = parseInt(url.searchParams.get('limit') || '20', 10);
-    const sortBy = url.searchParams.get('sort_by') || 'due_date';
-    const sortOrder = url.searchParams.get('sort_order') || 'asc';
-    
-    // Validate pagination parameters
-    const validatedPage = page > 0 ? page : 1;
-    const validatedLimit = limit > 0 && limit <= 100 ? limit : 20;
-    const skip = (validatedPage - 1) * validatedLimit;
-    
-    // Build where clause for filtering
-    const where: any = { user_id: user.id };
-    
-    if (status) {
-      // Validate status enum
-      const validStatuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'CANCELLED'];
-      if (validStatuses.includes(status)) {
-        where.status = status;
-      }
-    }
-    
-    if (priority) {
-      // Validate priority enum
-      const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-      if (validPriorities.includes(priority)) {
-        where.priority = priority;
-      }
-    }
-    
-    if (agentId) {
-      // Validate UUID format
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(agentId)) {
-        where.agent_id = agentId;
-      }
-    }
-    
-    // Validate sort parameters
-    const validSortFields = ['due_date', 'created_at', 'priority', 'status', 'title'];
-    const validatedSortBy = validSortFields.includes(sortBy) ? sortBy : 'due_date';
-    const validatedSortOrder = sortOrder === 'desc' ? 'desc' : 'asc';
-    
-    // Build order by object
-    const orderBy: any = {};
-    orderBy[validatedSortBy] = validatedSortOrder;
-    
-    // Add secondary sort by created_at if not already sorting by it
-    if (validatedSortBy !== 'created_at') {
-      orderBy.created_at = 'desc';
-    }
-    
-    try {
-      // Get total count for pagination
-      const totalCount = await prisma.task.count({ where });
-      
-      // Execute query with Prisma
-      const tasks = await prisma.task.findMany({
-        where,
-        include: {
-          agent: {
-            select: {
-              id: true,
-              name: true,
-              avatar_url: true,
-            },
-          },
-        },
-        orderBy,
-        skip,
-        take: validatedLimit,
-      });
-      
-      // Calculate pagination metadata
-      const totalPages = Math.ceil(totalCount / validatedLimit);
-      
-      return NextResponse.json({
-        tasks,
-        pagination: {
-          page: validatedPage,
-          limit: validatedLimit,
-          totalItems: totalCount,
-          totalPages,
-          hasNextPage: validatedPage < totalPages,
-          hasPrevPage: validatedPage > 1,
-        },
-      });
-    } catch (dbError) {
-      console.error('Database error fetching tasks:', dbError);
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: tasks, error } = await supabase
+      .from('Task')
+      .select(`
+        *,
+        Agent (
+          id,
+          name,
+          avatar_url
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching tasks:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch tasks', details: (dbError as Error).message },
+        { error: 'Failed to fetch tasks' },
         { status: 500 }
       );
     }
+
+    return NextResponse.json({ tasks: tasks || [] });
   } catch (error) {
-    console.error('Error fetching tasks:', error);
+    console.error('Error in GET /api/tasks:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch tasks', details: (error as Error).message },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
-}
-
-/**
- * OPTIONS handler for CORS preflight requests
- */
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
 }
 
 /**
@@ -153,138 +75,90 @@ export async function OPTIONS() {
  */
 export async function POST(req: NextRequest) {
   try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser(req);
     
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json(
-        { error: 'Unauthorized', details: authError?.message },
+        { error: 'Unauthorized' },
         { status: 401 }
       );
     }
-    
-    // Parse request body
-    let body;
-    try {
-      body = await req.json();
-    } catch (jsonError) {
-      return NextResponse.json(
-        { error: 'Invalid JSON format in request body' },
-        { status: 400 }
-      );
-    }
-    const { title, description, priority, agent_id, due_date, metadata } = body;
-    
+
+    const body = await req.json();
+    const { title, details, priority = 'medium', agentId, category = 'General', xpReward = 20 } = body;
+
     // Validate required fields
-    if (!title) {
+    if (!title?.trim()) {
       return NextResponse.json(
-        { error: 'Missing required field: title' },
+        { error: 'Task title is required' },
         { status: 400 }
       );
     }
-    
-    // Validate priority if provided
-    let validatedPriority: TaskPriority = TaskPriority.MEDIUM; // Default
-    if (priority) {
-      try {
-        // Check if priority is a valid enum value
-        const validPriorities = Object.values(TaskPriority);
-        if (validPriorities.includes(priority as TaskPriority)) {
-          validatedPriority = priority as TaskPriority;
-        } else {
-          return NextResponse.json(
-            { error: 'Invalid priority value', validValues: validPriorities },
-            { status: 400 }
-          );
-        }
-      } catch (e) {
-        return NextResponse.json(
-          { error: 'Invalid priority value', validValues: Object.values(TaskPriority) },
-          { status: 400 }
-        );
-      }
-    }
-    
-    // Validate due_date if provided
-    let validatedDueDate = undefined;
-    if (due_date) {
-      try {
-        validatedDueDate = new Date(due_date);
-        if (isNaN(validatedDueDate.getTime())) {
-          throw new Error('Invalid date format');
-        }
-      } catch (e) {
-        return NextResponse.json(
-          { error: 'Invalid due_date format. Please use ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)' },
-          { status: 400 }
-        );
-      }
-    }
-    
-    // If agent_id is provided, verify it belongs to the user
-    if (agent_id) {
-      // Validate UUID format
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(agent_id)) {
-        return NextResponse.json(
-          { error: 'Invalid agent ID format' },
-          { status: 400 }
-        );
-      }
-      
-      // Check if agent exists and belongs to user
-      const agent = await prisma.agent.findFirst({
-        where: {
-          id: agent_id,
-          user_id: user.id,
-        },
-      });
-      
-      if (!agent) {
-        return NextResponse.json(
-          { error: 'Agent not found or you do not have permission to assign tasks to it' },
-          { status: 400 }
-        );
-      }
-    }
-    
-    try {
-      // Create new task with Prisma
-      const task = await prisma.task.create({
-        data: {
-          title,
-          description,
-          status: TaskStatus.PENDING,
-          priority: validatedPriority,
-          user_id: user.id,
-          agent_id: agent_id || null,
-          due_date: validatedDueDate,
-          metadata: metadata || {},
-        },
-        include: {
-          agent: {
-            select: {
-              id: true,
-              name: true,
-              avatar_url: true,
-            },
-          },
-        },
-      });
-      // Emit real-time event
-      emitEvent('broadcast', { type: 'task_created', task });
-      return NextResponse.json({ task }, { status: 201 });
-    } catch (dbError) {
-      console.error('Database error creating task:', dbError);
+
+    if (!agentId) {
       return NextResponse.json(
-        { error: 'Failed to create task', details: (dbError as Error).message },
+        { error: 'Agent ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // Verify agent belongs to user
+    const { data: agent, error: agentError } = await supabase
+      .from('Agent')
+      .select('id, name')
+      .eq('id', agentId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (agentError || !agent) {
+      return NextResponse.json(
+        { error: 'Agent not found or access denied' },
+        { status: 400 }
+      );
+    }
+
+    // Create the task
+    const { data: task, error: taskError } = await supabase
+      .from('Task')
+      .insert({
+        user_id: user.id,
+        agent_id: agentId,
+        title: title.trim(),
+        description: details?.trim() || '',
+        details: details?.trim() || '',
+        priority: priority.toUpperCase(),
+        category,
+        xp_reward: xpReward,
+        status: 'PENDING'
+      })
+      .select(`
+        *,
+        Agent (
+          id,
+          name,
+          avatar_url
+        )
+      `)
+      .single();
+
+    if (taskError) {
+      console.error('Error creating task:', taskError);
+      return NextResponse.json(
+        { error: 'Failed to create task' },
         { status: 500 }
       );
     }
+
+    return NextResponse.json({ task }, { status: 201 });
   } catch (error) {
-    console.error('Error creating task:', error);
+    console.error('Error in POST /api/tasks:', error);
     return NextResponse.json(
-      { error: 'Failed to create task', details: (error as Error).message },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

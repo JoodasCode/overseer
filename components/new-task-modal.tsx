@@ -146,19 +146,19 @@ export function NewTaskModal({ isOpen, onClose, agents, selectedAgentId, onCreat
                   ))}
                 </SelectContent>
               </Select>
-              {selectedAgent && selectedAgent.memory && selectedAgent.memory.preferences && (
+              {selectedAgent && selectedAgent.tools && selectedAgent.tools.length > 0 && (
                 <div className="bg-muted/50 p-2 rounded border-pixel">
                   <div className="text-xs font-clean">
                     <span className="font-pixel">Specialties:</span>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {selectedAgent.memory.preferences.slice(0, 3).map((pref, index) => (
+                      {selectedAgent.tools.slice(0, 3).map((tool, index) => (
                         <Badge key={index} variant="outline" className="font-pixel text-xs">
-                          {pref}
+                          {tool}
                         </Badge>
                       ))}
-                      {selectedAgent.memory.preferences.length > 3 && (
+                      {selectedAgent.tools.length > 3 && (
                         <Badge variant="outline" className="font-pixel text-xs">
-                          +{selectedAgent.memory.preferences.length - 3}
+                          +{selectedAgent.tools.length - 3}
                         </Badge>
                       )}
                     </div>

@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
+import { useUserIntegrations } from "@/lib/hooks/use-api"
+import { Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -104,11 +106,54 @@ const availableIntegrations: Integration[] = [
 ]
 
 export function IntegrationHub() {
-  const [integrations, setIntegrations] = useState(availableIntegrations)
-  const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null)
-  const [showSetupModal, setShowSetupModal] = useState(false)
-  const [apiKey, setApiKey] = useState("")
-  const [showApiKey, setShowApiKey] = useState(false)
+  // All hooks must be called in the same order every time - NO CONDITIONAL HOOKS!
+  const { integrations: userIntegrations, loading, error } = useUserIntegrations();
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  // Update integrations when userIntegrations change
+  React.useEffect(() => {
+    if (userIntegrations && userIntegrations.length > 0) {
+      setIntegrations(userIntegrations);
+    }
+  }, [userIntegrations]);
+
+  // Use real integrations or fallback to availableIntegrations for demo
+  const displayIntegrations = userIntegrations && userIntegrations.length > 0 ? userIntegrations : availableIntegrations;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-pixel text-2xl text-primary">Integration Hub</h1>
+          <p className="text-muted-foreground">Connect your tools and services</p>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center space-y-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+            <p className="font-pixel text-sm text-muted-foreground">Loading integrations...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-pixel text-2xl text-primary">Integration Hub</h1>
+          <p className="text-muted-foreground">Connect your tools and services</p>
+        </div>
+        <div className="text-center p-8">
+          <p className="text-red-500 font-pixel">Error loading integrations: {error}</p>
+        </div>
+      </div>
+    );
+  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -204,8 +249,8 @@ export function IntegrationHub() {
     )
   }
 
-  const connectedCount = integrations.filter((int) => int.status === "connected").length
-  const errorCount = integrations.filter((int) => int.status === "error").length
+  const connectedCount = displayIntegrations.filter((int) => int.status === "connected").length
+  const errorCount = displayIntegrations.filter((int) => int.status === "error").length
 
   return (
     <div className="space-y-6">
@@ -247,7 +292,7 @@ export function IntegrationHub() {
             <Activity className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-pixel">{integrations.filter((int) => int.lastSync).length}</div>
+            <div className="text-2xl font-pixel">{displayIntegrations.filter((int) => int.lastSync).length}</div>
             <p className="text-xs text-muted-foreground">Recently synced</p>
           </CardContent>
         </Card>
@@ -258,7 +303,7 @@ export function IntegrationHub() {
             <Shield className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-pixel">{Math.round((connectedCount / integrations.length) * 100)}%</div>
+            <div className="text-2xl font-pixel">{Math.round((connectedCount / displayIntegrations.length) * 100)}%</div>
             <p className="text-xs text-muted-foreground">System health</p>
           </CardContent>
         </Card>
@@ -286,7 +331,7 @@ export function IntegrationHub() {
 
         <TabsContent value="all" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {integrations.map((integration) => (
+            {displayIntegrations.map((integration) => (
               <Card key={integration.id} className="border-pixel">
                 <CardHeader>
                   <CardTitle className="font-pixel text-sm flex items-center justify-between">
@@ -353,7 +398,7 @@ export function IntegrationHub() {
         {["communication", "productivity", "analytics", "crm"].map((category) => (
           <TabsContent key={category} value={category} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {integrations
+              {displayIntegrations
                 .filter((integration) => integration.category === category)
                 .map((integration) => (
                   <Card key={integration.id} className="border-pixel">

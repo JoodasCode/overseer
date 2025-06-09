@@ -9,14 +9,14 @@ import { isValidUUID, createErrorResponse } from '@/lib/api-utils/validation';
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authenticate user
     const { user, errorResponse } = await authenticate(req);
     if (errorResponse) return errorResponse;
     
-    const keyId = params.id;
+    const { id: keyId } = await params;
     
     // Validate UUID format
     if (!isValidUUID(keyId)) {

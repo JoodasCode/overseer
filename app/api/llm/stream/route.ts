@@ -6,6 +6,7 @@ import { agentContextManager } from '@/lib/ai/agent-context';
 import { llmCacheManager } from '@/lib/ai/cache-manager';
 import { prisma } from '@/lib/db/prisma';
 import { ErrorHandler } from '@/lib/error-handler';
+import { safeJsonParse } from '@/lib/utils/safe-json';
 
 export const runtime = 'edge';
 
@@ -69,10 +70,7 @@ export async function POST(req: NextRequest) {
     const finalModelConfig = {
       ...modelConfig,
       // If agent has specific LLM configuration, use it
-      ...(agent?.llm_config ? JSON.parse(agent.llm_config as string) : {}),
-      // If agent has specific provider/model, use it
-      ...(agent?.llm_provider ? { provider: agent.llm_provider } : {}),
-      ...(agent?.llm_model ? { model: agent.llm_model } : {})
+      ...(agent?.preferences ? safeJsonParse(JSON.stringify(agent.preferences), {}) : {}),
     };
 
     // Check if user has enough credits

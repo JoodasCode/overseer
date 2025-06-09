@@ -12,6 +12,7 @@ import {
   Activity,
   GitBranch,
   Store,
+  MessageSquare,
 } from "lucide-react"
 import {
   Sidebar,
@@ -32,6 +33,7 @@ interface AppSidebarProps {
     page:
       | "dashboard"
       | "agents"
+      | "communications-dept"
       | "analytics"
       | "automations"
       | "integrations"
@@ -47,6 +49,7 @@ interface AppSidebarProps {
 const menuItems = [
   { title: "Dashboard", icon: Home, page: "dashboard" as const },
   { title: "Agents", icon: Users, page: "agents" as const },
+  { title: "Communications", icon: MessageSquare, page: "communications-dept" as const },
   { title: "Analytics", icon: BarChart3, page: "analytics" as const },
   { title: "Automations", icon: Zap, page: "automations" as const },
   { title: "Integrations", icon: Puzzle, page: "integrations" as const },

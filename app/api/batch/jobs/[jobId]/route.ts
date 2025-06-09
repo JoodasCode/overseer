@@ -11,9 +11,9 @@ import { ErrorHandler } from '@/lib/error-handler';
 import { prisma } from '@/lib/db/prisma';
 
 interface BatchJobParams {
-  params: {
+  params: Promise<{
     jobId: string;
-  };
+  }>;
 }
 
 /**
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest, { params }: BatchJobParams) {
     }
     
     const userId = session.user.id;
-    const { jobId } = params;
+    const { jobId } = await params;
     
     // Get job status
     const job = await batchProcessor.getJobStatus(jobId);
@@ -55,12 +55,13 @@ export async function GET(req: NextRequest, { params }: BatchJobParams) {
     
     return NextResponse.json(job);
   } catch (error: any) {
+    const paramsResolved = await params;
     ErrorHandler.logError(
       ErrorHandler.createCustomError({
         errorCode: 'get_batch_job_error',
         errorMessage: `Failed to get batch job: ${error.message}`,
-        userId: session?.user?.id,
-        payload: { error: error.message, jobId: params.jobId }
+        userId: undefined,
+        payload: { error: error.message, jobId: paramsResolved.jobId }
       })
     );
     
@@ -88,7 +89,7 @@ export async function DELETE(req: NextRequest, { params }: BatchJobParams) {
     }
     
     const userId = session.user.id;
-    const { jobId } = params;
+    const { jobId } = await params;
     
     // Cancel job
     const success = await batchProcessor.cancelJob(jobId, userId);
@@ -102,12 +103,13 @@ export async function DELETE(req: NextRequest, { params }: BatchJobParams) {
     
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    const paramsResolved = await params;
     ErrorHandler.logError(
       ErrorHandler.createCustomError({
         errorCode: 'cancel_batch_job_error',
         errorMessage: `Failed to cancel batch job: ${error.message}`,
-        userId: session?.user?.id,
-        payload: { error: error.message, jobId: params.jobId }
+        userId: undefined,
+        payload: { error: error.message, jobId: paramsResolved.jobId }
       })
     );
     

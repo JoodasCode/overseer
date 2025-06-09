@@ -1,200 +1,126 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { supabase } from '@/lib/supabase-client';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+interface MemoryCreateRequest {
+  content: string;
+  category?: string;
+  context?: string;
+  shareable?: boolean;
+  importance?: 'low' | 'medium' | 'high';
+}
+
+interface SharedMemoryRequest {
+  to_agent_id: string;
+  content: string;
+  memory_type: string;
+  context?: string;
+  expires_in_hours?: number;
+}
 
 /**
  * GET /api/agents/[id]/memory
- * Retrieve agent memory and recent memory logs
+ * Retrieve agent memory entries
  */
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Await params for Next.js 13+
+    const { id } = await params;
     
-    if (authError || !user) {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Unauthorized', details: authError?.message },
+        { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const agentId = params.id;
-    
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(agentId)) {
-      return NextResponse.json(
-        { error: 'Invalid agent ID format' },
-        { status: 400 }
-      );
-    }
-    
-    try {
-      // Verify agent belongs to user
-      const agent = await prisma.agent.findUnique({
-        where: {
-          id: agentId,
-          user_id: user.id
-        }
-      });
-      
-      if (!agent) {
-        return NextResponse.json(
-          { error: 'Agent not found or you do not have permission to access it' },
-          { status: 404 }
-        );
-      }
-
-      // Query agent memory
-      const memory = await prisma.agentMemory.findMany({
-        where: {
-          agent_id: agentId
-        }
-      });
-      
-      // Query recent memory logs
-      const logs = await prisma.memoryLog.findMany({
-        where: {
-          agent_id: agentId
-        },
-        orderBy: {
-          created_at: 'desc'
-        },
-        take: 20
-      });
-      
-      return NextResponse.json({
-        memory,
-        logs,
-      });
-    } catch (dbError) {
-      console.error('Database error:', dbError);
-      return NextResponse.json(
-        { error: 'Failed to fetch agent memory', details: (dbError as Error).message },
-        { status: 500 }
-      );
-    }
-  } catch (error) {
-    console.error('Error fetching agent memory:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch agent memory' },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * PATCH /api/agents/[id]/memory
- * Update agent memory
- */
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized', details: authError?.message },
+        { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const agentId = params.id;
-    
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(agentId)) {
+    // Verify agent belongs to user
+    const { data: agent, error: agentError } = await supabase
+      .from('agents')
+      .select('id, user_id')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (agentError || !agent) {
       return NextResponse.json(
-        { error: 'Invalid agent ID format' },
-        { status: 400 }
+        { error: 'Agent not found' },
+        { status: 404 }
       );
     }
-    
-    try {
-      // Verify agent belongs to user
-      const agent = await prisma.agent.findUnique({
-        where: {
-          id: agentId,
-          user_id: user.id
-        }
-      });
-      
-      if (!agent) {
-        return NextResponse.json(
-          { error: 'Agent not found or you do not have permission to update it' },
-          { status: 404 }
-        );
-      }
-      
-      // Parse request body
-      const body = await req.json();
-      const { key, value, type, metadata } = body;
-      
-      if (!key) {
-        return NextResponse.json(
-          { error: 'Memory key is required' },
-          { status: 400 }
-        );
-      }
-      
-      // Check if memory exists
-      const existingMemory = await prisma.agentMemory.findUnique({
-        where: {
-          agent_id_key: {
-            agent_id: agentId,
-            key: key
-          }
-        }
-      });
-      
-      let memory;
-      
-      if (existingMemory) {
-        // Update existing memory
-        memory = await prisma.agentMemory.update({
-          where: {
-            agent_id_key: {
-              agent_id: agentId,
-              key: key
-            }
-          },
-          data: {
-            value: value !== undefined ? value : existingMemory.value,
-            type: type !== undefined ? type : existingMemory.type,
-            metadata: metadata !== undefined ? metadata : existingMemory.metadata,
-          }
-        });
-      } else {
-        // Create new memory if it doesn't exist
-        memory = await prisma.agentMemory.create({
-          data: {
-            agent_id: agentId,
-            key: key,
-            value: value || '',
-            type: type || 'string',
-            metadata: metadata || {}
-          }
-        });
-      }
-      
-      return NextResponse.json({ memory });
-    } catch (dbError) {
-      console.error('Database error updating agent memory:', dbError);
+
+    const url = new URL(req.url);
+    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+    const category = url.searchParams.get('category');
+    const include_shared = url.searchParams.get('include_shared') === 'true';
+
+    // Get agent's own memory
+    let memoryQuery = supabase
+      .from('agent_memory')
+      .select('*')
+      .eq('agent_id', id)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (category) {
+      memoryQuery = memoryQuery.eq('category', category);
+    }
+
+    const { data: memory, error: memoryError } = await memoryQuery;
+
+    if (memoryError) {
       return NextResponse.json(
-        { error: 'Failed to update agent memory', details: (dbError as Error).message },
+        { error: 'Failed to fetch memory', details: memoryError.message },
         { status: 500 }
       );
     }
+
+    let sharedMemory = [];
+    if (include_shared) {
+      // Get shared memory directed to this agent
+      const { data: shared, error: sharedError } = await supabase
+        .from('shared_agent_memory')
+        .select(`
+          *,
+          from_agent:agents!shared_agent_memory_from_agent_id_fkey(name, avatar)
+        `)
+        .eq('to_agent_id', id)
+        .or(`context_expires_at.is.null,context_expires_at.gt.${new Date().toISOString()}`)
+        .order('shared_at', { ascending: false })
+        .limit(10);
+
+      if (!sharedError) {
+        sharedMemory = shared || [];
+      }
+    }
+
+    return NextResponse.json({
+      memory: memory || [],
+      shared_memory: sharedMemory,
+      total: memory?.length || 0
+    });
+
   } catch (error) {
-    console.error('Error updating agent memory:', error);
     return NextResponse.json(
-      { error: 'Failed to update agent memory' },
+      { error: 'Internal server error', details: (error as Error).message },
       { status: 500 }
     );
   }
@@ -202,134 +128,220 @@ export async function PATCH(
 
 /**
  * POST /api/agents/[id]/memory
- * Add a new memory log entry
+ * Create new memory entry or share memory with another agent
  */
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Await params for Next.js 13+
+    const { id } = await params;
     
-    if (authError || !user) {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Unauthorized', details: authError?.message },
+        { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const agentId = params.id;
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(agentId)) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Invalid agent ID format' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
-    
-    try {
-      // Verify agent belongs to user
-      const agent = await prisma.agent.findUnique({
-        where: {
-          id: agentId,
-          user_id: user.id
-        }
-      });
-      
-      if (!agent) {
+
+    // Verify agent belongs to user
+    const { data: agent, error: agentError } = await supabase
+      .from('agents')
+      .select('id, user_id, name')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (agentError || !agent) {
+      return NextResponse.json(
+        { error: 'Agent not found' },
+        { status: 404 }
+      );
+    }
+
+    const body = await req.json();
+    const { type } = body;
+
+    if (type === 'share_memory') {
+      // Share memory with another agent
+      const { to_agent_id, content, memory_type, context, expires_in_hours }: SharedMemoryRequest = body;
+
+      if (!to_agent_id || !content || !memory_type) {
         return NextResponse.json(
-          { error: 'Agent not found or you do not have permission to access it' },
-          { status: 404 }
-        );
-      }
-      
-      // Parse request body
-      const body = await req.json();
-      const { operation, key, new_value, old_value, metadata } = body;
-      
-      if (!operation || !key || new_value === undefined) {
-        return NextResponse.json(
-          { error: 'Missing required fields: operation, key, new_value' },
+          { error: 'Missing required fields for memory sharing' },
           { status: 400 }
         );
       }
-      
-      // Create memory log entry
-      const log = await prisma.memoryLog.create({
-        data: {
-          agent_id: agentId,
-          operation,
-          key,
-          new_value: typeof new_value === 'string' ? new_value : JSON.stringify(new_value),
-          old_value: old_value ? (typeof old_value === 'string' ? old_value : JSON.stringify(old_value)) : null,
-          metadata: metadata || {},
-          created_at: new Date()
-        }
-      });
-      
-      // If operation is 'learning', update recent_learnings in agent memory
-      if (operation === 'learning') {
-        // Get existing memory
-        const existingMemory = await prisma.agentMemory.findFirst({
-          where: {
-            agent_id: agentId,
-            key: 'recent_learnings'
-          }
-        });
-        
-        if (existingMemory) {
-          // Parse existing learnings
-          let recentLearnings = [];
-          try {
-            recentLearnings = typeof existingMemory.value === 'string' 
-              ? JSON.parse(existingMemory.value) 
-              : existingMemory.value || [];
-          } catch (e) {
-            // If parsing fails, start with empty array
-            console.error('Failed to parse recent learnings:', e);
-          }
-          
-          // Add new learning to the beginning and limit to 10 items
-          const updatedLearnings = [new_value, ...recentLearnings].slice(0, 10);
-          
-          // Update memory
-          await prisma.agentMemory.update({
-            where: {
-              id: existingMemory.id
-            },
-            data: {
-              value: JSON.stringify(updatedLearnings)
-            }
-          });
-        } else {
-          // Create new memory entry for recent learnings
-          await prisma.agentMemory.create({
-            data: {
-              agent_id: agentId,
-              key: 'recent_learnings',
-              value: JSON.stringify([new_value]),
-              type: 'json',
-              metadata: {}
-            }
-          });
-        }
+
+      // Verify target agent exists and belongs to same user
+      const { data: targetAgent, error: targetError } = await supabase
+        .from('agents')
+        .select('id, user_id')
+        .eq('id', to_agent_id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (targetError || !targetAgent) {
+        return NextResponse.json(
+          { error: 'Target agent not found' },
+          { status: 404 }
+        );
       }
-      
-      return NextResponse.json({ log }, { status: 201 });
-    } catch (dbError) {
-      console.error('Database error creating memory log:', dbError);
+
+      const expiresAt = expires_in_hours 
+        ? new Date(Date.now() + expires_in_hours * 60 * 60 * 1000).toISOString()
+        : null;
+
+      const { data: sharedMemory, error: shareError } = await supabase
+        .from('shared_agent_memory')
+        .insert({
+          from_agent_id: id,
+          to_agent_id,
+          memory_type,
+          content,
+          context,
+          context_expires_at: expiresAt
+        })
+        .select()
+        .single();
+
+      if (shareError) {
+        return NextResponse.json(
+          { error: 'Failed to share memory', details: shareError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ shared_memory: sharedMemory });
+
+    } else {
+      // Create regular memory entry
+      const { content, category, context, shareable, importance }: MemoryCreateRequest = body;
+
+      if (!content) {
+        return NextResponse.json(
+          { error: 'Memory content is required' },
+          { status: 400 }
+        );
+      }
+
+      const { data: memory, error: memoryError } = await supabase
+        .from('agent_memory')
+        .insert({
+          agent_id: id,
+          user_id: user.id,
+          content,
+          category: category || 'general',
+          context,
+          shareable: shareable || false,
+          importance: importance || 'medium'
+        })
+        .select()
+        .single();
+
+      if (memoryError) {
+        return NextResponse.json(
+          { error: 'Failed to create memory', details: memoryError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ memory });
+    }
+
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Internal server error', details: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/agents/[id]/memory/[memory_id]
+ * Delete specific memory entry
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Await params for Next.js 13+
+    const { id } = await params;
+    
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Failed to create memory log', details: (dbError as Error).message },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(req.url);
+    const memoryId = url.searchParams.get('memory_id');
+
+    if (!memoryId) {
+      return NextResponse.json(
+        { error: 'Memory ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Verify agent and memory belong to user
+    const { data: memory, error: memoryError } = await supabase
+      .from('agent_memory')
+      .select('id, agent_id, user_id')
+      .eq('id', memoryId)
+      .eq('agent_id', id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (memoryError || !memory) {
+      return NextResponse.json(
+        { error: 'Memory not found' },
+        { status: 404 }
+      );
+    }
+
+    const { error: deleteError } = await supabase
+      .from('agent_memory')
+      .delete()
+      .eq('id', memoryId);
+
+    if (deleteError) {
+      return NextResponse.json(
+        { error: 'Failed to delete memory', details: deleteError.message },
         { status: 500 }
       );
     }
+
+    return NextResponse.json({ success: true });
+
   } catch (error) {
-    console.error('Error creating memory log:', error);
     return NextResponse.json(
-      { error: 'Failed to create memory log' },
+      { error: 'Internal server error', details: (error as Error).message },
       { status: 500 }
     );
   }

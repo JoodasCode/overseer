@@ -3,20 +3,38 @@
 import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { HireAgentModal } from "./hire-agent-modal"
-import { Users, CheckCircle, Clock, TrendingUp, Star, Zap, AlertCircle, Plus, Activity } from "lucide-react"
+import { ConfirmDeleteModal } from "./confirm-delete-modal"
+import { DepartmentOverview } from "./communications-dept/department-overview"
+import { Users, CheckCircle, Clock, TrendingUp, Star, Zap, AlertCircle, Plus, Activity, Trash2, MessageSquare, Eye, ArrowRight } from "lucide-react"
+import { useToast } from "@/lib/hooks/use-toast"
+import { useAgents } from "@/lib/hooks/use-api"
 import type { Agent } from "@/lib/types"
 
 interface DashboardOverviewProps {
   agents: Agent[]
   onSelectAgent: (agent: Agent) => void
+  onAgentHired?: () => void
+  onShowCommunicationsDept?: () => void
 }
 
-export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewProps) {
+export function DashboardOverview({ agents, onSelectAgent, onAgentHired, onShowCommunicationsDept }: DashboardOverviewProps) {
   const [showHireAgent, setShowHireAgent] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const { deleteAgent } = useAgents()
+  const { toast } = useToast()
 
   // Ensure agents is always an array to prevent undefined errors
   const safeAgents = agents || []
+
+  // Filter agents by department
+  const communicationsAgents = safeAgents.filter(agent => 
+    agent.metadata?.department === 'communications' || 
+    agent.preferences?.department === 'communications'
+  )
 
   const totalTasks = safeAgents.reduce((sum, agent) => sum + (agent.tasks?.length || 0), 0)
   const completedTasks = safeAgents.reduce(
@@ -44,6 +62,41 @@ export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewPr
     { agent: "Tara", quote: "Need approval on onboarding kit." },
     { agent: "Jamie", quote: "Newsletter CTR up 15% this week! 📈" },
   ]
+
+  const handleDeleteAgent = (agent: Agent) => {
+    setAgentToDelete(agent)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteAgent = async () => {
+    if (!agentToDelete) return
+
+    setIsDeleting(true)
+    try {
+      await deleteAgent(agentToDelete.id)
+      toast({
+        variant: "success",
+        title: "🗑️ Agent Removed",
+        description: `${agentToDelete.name} has been successfully removed from your team.`,
+      })
+      
+      // Trigger refresh if callback provided
+      if (onAgentHired) {
+        onAgentHired()
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete agent:', error)
+      toast({
+        variant: "destructive",
+        title: "❌ Failed to Remove Agent",
+        description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+      })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteModal(false)
+      setAgentToDelete(null)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -98,6 +151,67 @@ export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewPr
         </div>
       </div>
 
+      {/* Communications Department Showcase */}
+      {communicationsAgents.length > 0 && (
+        <Card className="border-blue-500/20 bg-gradient-to-r from-blue-500/5 to-purple-500/5">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <MessageSquare className="h-8 w-8 text-blue-600" />
+                <div>
+                  <CardTitle className="text-xl">Communications Department</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {communicationsAgents.length} specialized agents working together
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={onShowCommunicationsDept}
+                className="font-pixel text-xs"
+              >
+                <Eye className="w-3 h-3 mr-1" />
+                View Department
+                <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+              {communicationsAgents.map((agent) => (
+                <div key={agent.id} className="text-center">
+                  <div 
+                    className="w-12 h-12 mx-auto mb-2 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
+                    onClick={() => onSelectAgent(agent)}
+                  >
+                    <span className="text-2xl">{agent.avatar_url}</span>
+                  </div>
+                  <div className="text-xs font-medium">{agent.name}</div>
+                  <div className="text-xs text-muted-foreground">{agent.preferences?.role || 'Agent'}</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-center text-sm">
+              <div>
+                <div className="font-bold text-blue-600">{communicationsAgents.length}</div>
+                <div className="text-xs text-muted-foreground">Active Agents</div>
+              </div>
+              <div>
+                <div className="font-bold text-green-600">
+                  {communicationsAgents.reduce((sum, agent) => sum + (agent.tasks?.length || 0), 0)}
+                </div>
+                <div className="text-xs text-muted-foreground">Total Tasks</div>
+              </div>
+              <div>
+                <div className="font-bold text-purple-600">94%</div>
+                <div className="text-xs text-muted-foreground">Efficiency</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Agent Status */}
         <div className="lg:col-span-2 space-y-4">
@@ -135,6 +249,17 @@ export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewPr
                             <Badge variant="outline" className="font-pixel text-xs">
                               Lv.{agent.level}
                             </Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeleteAgent(agent)
+                              }}
+                              className="font-pixel text-xs px-2 h-6 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
                           </div>
                         </div>
 
@@ -230,7 +355,17 @@ export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewPr
         </div>
       </div>
 
-      <HireAgentModal isOpen={showHireAgent} onClose={() => setShowHireAgent(false)} />
+      <HireAgentModal isOpen={showHireAgent} onClose={() => setShowHireAgent(false)} onAgentHired={onAgentHired} />
+      <ConfirmDeleteModal 
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setAgentToDelete(null)
+        }}
+        onConfirm={confirmDeleteAgent}
+        agent={agentToDelete}
+        isDeleting={isDeleting}
+      />
     </div>
   )
 }

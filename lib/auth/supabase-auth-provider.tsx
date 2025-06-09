@@ -41,31 +41,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
     supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Missing'
   });
 
-
-
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session with timeout
+    // Get initial session with multiple fallback strategies
     const getInitialSession = async () => {
       try {
         console.log('🔍 Getting initial session...');
         
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Strategy 1: Try getSession first
+        let { data: { session }, error } = await supabase.auth.getSession();
         
         console.log('📋 Initial session result:', { 
           session: session ? 'Found' : 'None', 
           error: error ? error.message : 'None',
-          user: session?.user ? { id: session.user.id, email: session.user.email } : 'None'
+          user: session?.user ? { 
+            id: session.user.id, 
+            email: session.user.email 
+          } : 'None'
         });
-        
+
+        // Strategy 2: If no session, try getUser as fallback
+        if (!session && !error) {
+          console.log('🔄 No session found, trying getUser fallback...');
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (user && !userError) {
+            console.log('✅ Found user via getUser fallback:', user.email);
+            // Create a minimal session object for consistency
+            session = {
+              access_token: 'fallback',
+              refresh_token: 'fallback',
+              expires_in: 3600,
+              token_type: 'bearer',
+              user
+            } as any;
+          }
+        }
+
         if (mounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
+          if (session?.user) {
+            console.log('✅ User authenticated:', session.user.email);
+            setSession(session);
+            setUser(session.user);
+          } else {
+            console.log('❌ No authenticated user found');
+            setSession(null);
+            setUser(null);
+          }
           setLoading(false);
         }
-      } catch (err) {
-        console.error('❌ Error getting initial session:', err);
+      } catch (error) {
+        console.error('❌ Auth initialization error:', error);
         if (mounted) {
           setSession(null);
           setUser(null);
@@ -74,20 +100,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
+    getInitialSession();
+
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔄 Auth state change:', { event, session: session ? 'Found' : 'None' });
+        console.log('🔄 Auth state changed:', { event, user: session?.user?.email || 'None' });
+        
         if (mounted) {
           setSession(session);
-          setUser(session?.user ?? null);
+          setUser(session?.user || null);
           setLoading(false);
         }
       }
     );
-
-    // Get initial session
-    getInitialSession();
 
     return () => {
       mounted = false;
@@ -95,11 +121,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
+  // Debug current state
+  console.log('🔑 Auth token updated:', user ? user.email : 'None');
+
   const signIn = async (email: string, password: string) => {
+    console.log('🔐 Attempting sign in for:', email);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
+    if (error) {
+      console.log('❌ Sign in error:', error.message);
+    } else {
+      console.log('✅ Sign in initiated for:', email);
+    }
+    
     return { error };
   };
 

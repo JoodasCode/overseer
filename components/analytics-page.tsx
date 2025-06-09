@@ -1,7 +1,8 @@
 "use client"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TrendingUp, TrendingDown, BarChart3, Clock, Target, Star, Zap, Users } from "lucide-react"
+import { TrendingUp, TrendingDown, BarChart3, Clock, Target, Star, Zap, Users, Loader2 } from "lucide-react"
+import { useAnalytics } from "@/lib/hooks/use-api"
 import type { Agent } from "@/lib/types"
 
 interface AnalyticsPageProps {
@@ -9,18 +10,54 @@ interface AnalyticsPageProps {
 }
 
 export function AnalyticsPage({ agents }: AnalyticsPageProps) {
-  const weeklyData = [
-    { day: "Mon", tasks: 12, xp: 340 },
-    { day: "Tue", tasks: 15, xp: 420 },
-    { day: "Wed", tasks: 18, xp: 510 },
-    { day: "Thu", tasks: 14, xp: 380 },
-    { day: "Fri", tasks: 20, xp: 580 },
-    { day: "Sat", tasks: 8, xp: 220 },
-    { day: "Sun", tasks: 6, xp: 180 },
-  ]
+  const { analytics, loading, error } = useAnalytics();
 
-  const maxTasks = Math.max(...weeklyData.map((d) => d.tasks))
-  const maxXP = Math.max(...weeklyData.map((d) => d.xp))
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="font-pixel text-sm text-muted-foreground">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-pixel text-2xl text-primary">Analytics Command</h1>
+          <p className="text-muted-foreground font-clean">Performance metrics and insights</p>
+        </div>
+        <div className="text-center p-8">
+          <p className="text-red-500 font-pixel">Error loading analytics: {error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate real metrics from agents data
+  const totalTasks = agents.reduce((sum, agent) => sum + (agent.tasks?.length || 0), 0);
+  const completedTasks = agents.reduce((sum, agent) => 
+    sum + (agent.tasks?.filter(t => t.status === "completed").length || 0), 0
+  );
+  const successRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const totalXP = agents.reduce((sum, agent) => sum + (agent.level * 250), 0);
+  
+  // Use real analytics data or calculate from agents
+  const weeklyData = analytics?.weeklyData || [
+    { day: "Mon", tasks: Math.floor(totalTasks * 0.12), xp: Math.floor(totalXP * 0.08) },
+    { day: "Tue", tasks: Math.floor(totalTasks * 0.15), xp: Math.floor(totalXP * 0.12) },
+    { day: "Wed", tasks: Math.floor(totalTasks * 0.18), xp: Math.floor(totalXP * 0.16) },
+    { day: "Thu", tasks: Math.floor(totalTasks * 0.14), xp: Math.floor(totalXP * 0.14) },
+    { day: "Fri", tasks: Math.floor(totalTasks * 0.20), xp: Math.floor(totalXP * 0.18) },
+    { day: "Sat", tasks: Math.floor(totalTasks * 0.11), xp: Math.floor(totalXP * 0.16) },
+    { day: "Sun", tasks: Math.floor(totalTasks * 0.10), xp: Math.floor(totalXP * 0.16) },
+  ];
+
+  const maxTasks = Math.max(...weeklyData.map((d: any) => d.tasks), 1);
+  const maxXP = Math.max(...weeklyData.map((d: any) => d.xp), 1);
 
   return (
     <div className="space-y-6">
@@ -54,22 +91,22 @@ export function AnalyticsPage({ agents }: AnalyticsPageProps) {
                 <h3 className="font-pixel text-xs text-primary">Weekly Tasks</h3>
                 <BarChart3 className="w-4 h-4 text-primary" />
               </div>
-              <div className="text-2xl font-pixel text-foreground">93</div>
+              <div className="text-2xl font-pixel text-foreground">{totalTasks}</div>
               <div className="flex items-center text-xs text-green-600 font-clean">
                 <TrendingUp className="w-3 h-3 mr-1" />
-                +12% from last week
+                Total tasks
               </div>
             </div>
 
             <div className="pixel-card p-4">
               <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <h3 className="font-pixel text-xs text-primary">Avg Response</h3>
+                <h3 className="font-pixel text-xs text-primary">Active Agents</h3>
                 <Clock className="w-4 h-4 text-primary" />
               </div>
-              <div className="text-2xl font-pixel text-foreground">2.4h</div>
+              <div className="text-2xl font-pixel text-foreground">{agents.filter(a => a.status === 'active').length}</div>
               <div className="flex items-center text-xs text-green-600 font-clean">
-                <TrendingDown className="w-3 h-3 mr-1" />
-                -15% faster
+                <TrendingUp className="w-3 h-3 mr-1" />
+                Agents online
               </div>
             </div>
 
@@ -78,10 +115,10 @@ export function AnalyticsPage({ agents }: AnalyticsPageProps) {
                 <h3 className="font-pixel text-xs text-primary">Success Rate</h3>
                 <Target className="w-4 h-4 text-primary" />
               </div>
-              <div className="text-2xl font-pixel text-foreground">94%</div>
+              <div className="text-2xl font-pixel text-foreground">{successRate}%</div>
               <div className="flex items-center text-xs text-green-600 font-clean">
                 <TrendingUp className="w-3 h-3 mr-1" />
-                +3% improvement
+                Completion rate
               </div>
             </div>
 
@@ -90,10 +127,10 @@ export function AnalyticsPage({ agents }: AnalyticsPageProps) {
                 <h3 className="font-pixel text-xs text-primary">Team XP</h3>
                 <Star className="w-4 h-4 text-primary" />
               </div>
-              <div className="text-2xl font-pixel text-foreground">2,630</div>
+              <div className="text-2xl font-pixel text-foreground">{totalXP.toLocaleString()}</div>
               <div className="flex items-center text-xs text-green-600 font-clean">
                 <TrendingUp className="w-3 h-3 mr-1" />
-                +580 this week
+                Total experience
               </div>
             </div>
           </div>

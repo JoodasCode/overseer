@@ -1,15 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { NewTaskModal } from "./new-task-modal"
 import { HireAgentModal } from "./hire-agent-modal"
+import { ConfirmDeleteModal } from "./confirm-delete-modal"
 import { LevelUpModal } from "./level-up-modal"
 import { AgentChatInterface } from "./agent-chat-interface"
 import { KnowledgeUpload } from "./knowledge-upload"
+import { useToast } from "@/lib/hooks/use-toast"
+import { useAgents } from "@/lib/hooks/use-api"
+import { supabase } from "@/lib/supabase-client"
 import {
   CheckCircle,
   Clock,
@@ -23,6 +27,7 @@ import {
   Brain,
   Settings,
   MessageSquare,
+  Trash2,
 } from "lucide-react"
 import type { Agent } from "@/lib/types"
 
@@ -30,6 +35,7 @@ interface AgentPageProps {
   agents: Agent[]
   selectedAgent: Agent
   onSelectAgent: (agent: Agent) => void
+  onAgentHired?: () => void
 }
 
 // Helper function to safely convert tools to array format
@@ -60,17 +66,56 @@ const getMemoryLearningsArray = (memory: any): string[] => {
   return []
 }
 
-export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPageProps) {
+export function AgentPage({ agents, selectedAgent, onSelectAgent, onAgentHired }: AgentPageProps) {
   const [activeTab, setActiveTab] = useState("tasks")
   const [showNewTask, setShowNewTask] = useState(false)
   const [showHireAgent, setShowHireAgent] = useState(false)
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [showChat, setShowChat] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [agentTasks, setAgentTasks] = useState<any[]>([])
+  const [loadingTasks, setLoadingTasks] = useState(false)
+  const { deleteAgent } = useAgents()
+  const { toast } = useToast()
 
   // Safely get arrays from selectedAgent
   const agentTools = getToolsArray(selectedAgent.tools)
-  const agentTasks = getTasksArray(selectedAgent.tasks)
   const agentLearnings = getMemoryLearningsArray(selectedAgent.memory)
+
+  // Function to fetch tasks for the selected agent
+  const fetchTasks = async () => {
+    if (!selectedAgent?.id) return
+    
+    setLoadingTasks(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+
+      const response = await fetch('/api/tasks', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      })
+
+      if (response.ok) {
+        const { tasks } = await response.json()
+        // Filter tasks for the selected agent
+        const agentSpecificTasks = tasks.filter((task: any) => task.agent_id === selectedAgent.id)
+        setAgentTasks(agentSpecificTasks)
+      }
+    } catch (error) {
+      console.error('Failed to fetch tasks:', error)
+    } finally {
+      setLoadingTasks(false)
+    }
+  }
+
+  // Fetch tasks when the selected agent changes
+  useEffect(() => {
+    fetchTasks()
+  }, [selectedAgent.id])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -98,7 +143,7 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
     }
   }
 
-  const handleCreateTask = (taskData: {
+  const handleCreateTask = async (taskData: {
     title: string
     details: string
     priority: "low" | "medium" | "high"
@@ -106,8 +151,97 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
     xpReward: number
     category: string
   }) => {
-    console.log("Creating task:", taskData)
-    setShowNewTask(false)
+    try {
+      console.log("Creating task:", taskData)
+
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        toast({
+          title: "Authentication Error",
+          description: "You must be logged in to create tasks",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(taskData),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create task')
+      }
+
+      const { task } = await response.json()
+      
+      toast({
+        title: "Task Created",
+        description: `Successfully created task: ${task.title}`,
+      })
+
+      setShowNewTask(false)
+      
+      // Refresh the task list to show the new task
+      fetchTasks()
+      
+    } catch (error) {
+      console.error("Error creating task:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create task",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteAgent = (agent: Agent) => {
+    setAgentToDelete(agent)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteAgent = async () => {
+    if (!agentToDelete) return
+
+    setIsDeleting(true)
+    try {
+      await deleteAgent(agentToDelete.id)
+      toast({
+        variant: "success",
+        title: "🗑️ Agent Removed",
+        description: `${agentToDelete.name} has been successfully removed from your team.`,
+      })
+
+      // If we deleted the selected agent, select another one
+      if (agentToDelete.id === selectedAgent.id && agents.length > 1) {
+        const remainingAgents = agents.filter(a => a.id !== agentToDelete.id)
+        if (remainingAgents.length > 0) {
+          onSelectAgent(remainingAgents[0])
+        }
+      }
+      
+      // Trigger refresh if callback provided
+      if (onAgentHired) {
+        onAgentHired()
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete agent:', error)
+      toast({
+        variant: "destructive",
+        title: "❌ Failed to Remove Agent",
+        description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+      })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteModal(false)
+      setAgentToDelete(null)
+    }
   }
 
   // Calculate XP progress
@@ -188,6 +322,14 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
                     <Badge variant="outline" className="font-pixel text-xs">
                       Lv.{selectedAgent.level}
                     </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteAgent(selectedAgent)}
+                      className="font-pixel text-xs px-2 h-6 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
                 </div>
 
@@ -465,7 +607,7 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
         onCreateTask={handleCreateTask}
       />
 
-      <HireAgentModal isOpen={showHireAgent} onClose={() => setShowHireAgent(false)} />
+      <HireAgentModal isOpen={showHireAgent} onClose={() => setShowHireAgent(false)} onAgentHired={onAgentHired} />
 
       <LevelUpModal
         isOpen={showLevelUp}
@@ -475,6 +617,17 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
       />
 
       <AgentChatInterface agent={selectedAgent} isOpen={showChat} onClose={() => setShowChat(false)} />
+
+      <ConfirmDeleteModal 
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setAgentToDelete(null)
+        }}
+        onConfirm={confirmDeleteAgent}
+        agent={agentToDelete}
+        isDeleting={isDeleting}
+      />
     </div>
   )
 }

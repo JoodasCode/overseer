@@ -14,9 +14,18 @@ import { StorageConfig, StorageProvider } from './types';
  */
 export function getStorageConfig(): StorageConfig {
   // Determine the storage provider from environment variables
-  const provider = process.env.STORAGE_PROVIDER === 'S3' 
-    ? StorageProvider.S3 
-    : StorageProvider.LOCAL;
+  let provider: StorageProvider;
+  
+  switch (process.env.STORAGE_PROVIDER) {
+    case 'S3':
+      provider = StorageProvider.S3;
+      break;
+    case 'SUPABASE':
+      provider = StorageProvider.SUPABASE;
+      break;
+    default:
+      provider = StorageProvider.LOCAL;
+  }
 
   // Common configuration
   const config: StorageConfig = {
@@ -32,6 +41,9 @@ export function getStorageConfig(): StorageConfig {
     config.accessKeyId = process.env.S3_ACCESS_KEY;
     config.secretAccessKey = process.env.S3_SECRET_KEY;
     config.endpoint = process.env.S3_ENDPOINT; // Optional for custom S3-compatible services
+  } else if (provider === StorageProvider.SUPABASE) {
+    config.supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    config.supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   }
 
   return config;

@@ -4,19 +4,13 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { Redis } from '@upstash/redis';
+import { getRedisClient } from '../redis-client';
 import { Integration, AuthStatus } from './types';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
 
 export class IntegrationManager {
   private static instance: IntegrationManager;
@@ -101,6 +95,7 @@ export class IntegrationManager {
    */
   public async getIntegration(userId: string, toolName: string): Promise<Integration | null> {
     // Try to get from cache first
+    const redis = getRedisClient();
     const cacheKey = `integration:${userId}:${toolName}`;
     const cachedIntegration = await redis.get<Integration>(cacheKey);
     
@@ -221,6 +216,7 @@ export class IntegrationManager {
       .eq('toolName', toolName);
     
     // Remove from cache
+    const redis = getRedisClient();
     const cacheKey = `integration:${userId}:${toolName}`;
     await redis.del(cacheKey);
   }
@@ -229,6 +225,7 @@ export class IntegrationManager {
    * Cache an integration in Redis
    */
   private async cacheIntegration(integration: Integration): Promise<void> {
+    const redis = getRedisClient();
     const cacheKey = `integration:${integration.userId}:${integration.toolName}`;
     
     // Cache for 1 hour

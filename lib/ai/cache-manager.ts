@@ -3,15 +3,9 @@
  * Implements caching for LLM responses to reduce token usage and improve response times
  */
 
-import { Redis } from '@upstash/redis';
 import { createHash } from 'crypto';
 import { Message } from './service';
-
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
+import { getRedisClient } from '../redis-client';
 
 export interface CachedResponse {
   content: string;
@@ -63,7 +57,7 @@ export class LLMCacheManager {
   ): Promise<CachedResponse | null> {
     try {
       const cacheKey = this.generateCacheKey(messages, modelConfig);
-      const cachedData = await redis.get<CachedResponse>(cacheKey);
+      const cachedData = await getRedisClient().get<CachedResponse>(cacheKey);
       
       return cachedData;
     } catch (error) {
@@ -92,7 +86,7 @@ export class LLMCacheManager {
         timestamp: Date.now(),
       };
       
-      await redis.set(cacheKey, cacheData, { ex: ttl });
+      await getRedisClient().set(cacheKey, cacheData, { ex: ttl });
       return true;
     } catch (error) {
       console.error('Error caching response:', error);

@@ -149,6 +149,21 @@ const nodeTypes = {
 }
 
 export function WorkflowBuilder({ agents }: WorkflowBuilderProps) {
+  // Deduplicate agents by name and prioritize most recent
+  const uniqueAgents = agents.reduce((acc, agent) => {
+    const existingAgent = acc.find(a => a.name === agent.name);
+    if (!existingAgent) {
+      acc.push(agent);
+    } else {
+      // Keep the most recently created agent (newer ID typically means more recent)
+      if (agent.id > existingAgent.id) {
+        const index = acc.findIndex(a => a.name === agent.name);
+        acc[index] = agent;
+      }
+    }
+    return acc;
+  }, [] as Agent[]);
+
   const [workflows, setWorkflows] = useState<Workflow[]>([
     {
       id: "1",
@@ -384,31 +399,40 @@ export function WorkflowBuilder({ agents }: WorkflowBuilderProps) {
                   ))}
 
                   <div className="mt-4">
-                    <h4 className="font-pixel text-xs mb-2">AGENTS</h4>
-                    {agents.map((agent) => (
-                      <div
-                        key={agent.id}
-                        draggable
-                        onDragStart={() =>
-                          handleDragStart({
-                            type: "agent",
-                            title: agent.name,
-                            description: `Execute task with ${agent.name}`,
-                            icon: <Users className="w-4 h-4" />,
-                            agentId: agent.id,
-                          })
-                        }
-                        className="p-2 border border-pixel rounded cursor-move hover:bg-background transition-colors"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <span>{agent.avatar}</span>
-                          <div className="min-w-0">
-                            <div className="font-pixel text-xs">{agent.name}</div>
-                            <div className="text-xs text-muted-foreground truncate">{agent.role}</div>
+                    <h4 className="font-pixel text-xs mb-2">HIRED AGENTS ({uniqueAgents.length})</h4>
+                    {uniqueAgents.length > 0 ? (
+                      uniqueAgents.map((agent) => (
+                        <div
+                          key={agent.id}
+                          draggable
+                          onDragStart={() =>
+                            handleDragStart({
+                              type: "agent",
+                              title: agent.name,
+                              description: `Execute task with ${agent.name} (${agent.role})`,
+                              icon: <Users className="w-4 h-4" />,
+                              agentId: agent.id,
+                            })
+                          }
+                          className="p-2 border border-pixel rounded cursor-move hover:bg-background transition-colors mb-2"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <span>{agent.avatar}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-pixel text-xs">{agent.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">{agent.role}</div>
+                            </div>
+                            <div className="w-2 h-2 bg-green-500 rounded-full" title="Active"></div>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="p-3 border border-dashed border-pixel rounded text-center">
+                        <Users className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                        <p className="text-xs text-muted-foreground">No agents hired yet</p>
+                        <p className="text-xs text-muted-foreground mt-1">Use "Hire Agent" to add team members</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </TabsContent>
 
@@ -535,7 +559,7 @@ export function WorkflowBuilder({ agents }: WorkflowBuilderProps) {
                   {node.data.agentId && (
                     <div className="mt-2">
                       <Badge variant="outline" className="font-pixel text-xs">
-                        {agents.find((a) => a.id === node.data.agentId)?.name}
+                        {uniqueAgents.find((a) => a.id === node.data.agentId)?.name}
                       </Badge>
                     </div>
                   )}
@@ -607,9 +631,9 @@ export function WorkflowBuilder({ agents }: WorkflowBuilderProps) {
                       className="w-full mt-1 p-2 border border-pixel rounded font-clean text-sm bg-background"
                     >
                       <option value="">Select an agent...</option>
-                      {agents.map((agent) => (
+                      {uniqueAgents.map((agent) => (
                         <option key={agent.id} value={agent.id}>
-                          {agent.avatar} {agent.name}
+                          {agent.avatar} {agent.name} - {agent.role}
                         </option>
                       ))}
                     </select>

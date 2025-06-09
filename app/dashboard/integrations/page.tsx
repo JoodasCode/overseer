@@ -12,6 +12,7 @@ import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { IntegrationCard } from '@/components/plugin-engine/integration-card';
+import { useAuth } from '@/lib/auth/supabase-auth-provider';
 
 interface Integration {
   id: string;
@@ -47,9 +48,12 @@ export default function IntegrationsPage() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, session, loading: authLoading } = useAuth();
   
   // Handle URL params for OAuth callbacks
   useEffect(() => {
+    if (!searchParams) return;
+    
     const errorParam = searchParams.get('error');
     const successParam = searchParams.get('success');
     const toolParam = searchParams.get('tool');
@@ -68,23 +72,55 @@ export default function IntegrationsPage() {
   // Fetch integrations
   useEffect(() => {
     const fetchIntegrations = async () => {
+      if (authLoading) {
+        console.log('🔐 IntegrationsPage: Auth still loading, skipping fetch');
+        return;
+      }
+
+      if (!user || !session) {
+        console.log('🔐 IntegrationsPage: No user or session, skipping fetch');
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setIsLoading(true);
+        setError(null);
         
-        // Fetch user integrations from the API
-        const response = await fetch('/api/plugin-engine/integrations');
+        console.log('🔌 Making authenticated API call to /api/plugin-engine/integrations');
+        
+        // Fetch user integrations from the API with authentication
+        const response = await fetch('/api/plugin-engine/integrations', {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        console.log('🔌 Integrations API Response status:', response.status);
         
         if (!response.ok) {
+          const errorData = await response.text();
+          console.error('❌ Integrations API Error:', errorData);
           throw new Error('Failed to fetch integrations');
         }
         
         const data = await response.json();
+        console.log('🔌 Integrations data:', data);
         
-        // Get available tools
-        const toolsResponse = await fetch('/api/plugin-engine');
+        // Get available tools (also with authentication)
+        const toolsResponse = await fetch('/api/plugin-engine', {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
         
         if (!toolsResponse.ok) {
-          throw new Error('Failed to fetch available tools');
+          console.warn('❌ Failed to fetch available tools, using fallback integrations');
+          // Use the integrations from the API response as fallback
+          setIntegrations(data.integrations || []);
+          return;
         }
         
         const toolsData = await toolsResponse.json();
@@ -109,7 +145,7 @@ export default function IntegrationsPage() {
           };
         });
         
-        setIntegrations(combinedIntegrations);
+        setIntegrations(combinedIntegrations.length > 0 ? combinedIntegrations : userIntegrations);
       } catch (err) {
         console.error('Error fetching integrations:', err);
         setError('Failed to load integrations. Please try again later.');
@@ -119,19 +155,21 @@ export default function IntegrationsPage() {
     };
     
     fetchIntegrations();
-  }, []);
+  }, [user, session, authLoading]);
   
   // Connect to an integration
   const handleConnect = async (toolName: string) => {
+    if (!user) {
+      toast.error('You must be logged in to connect integrations');
+      return;
+    }
+
     try {
       // Generate a state parameter with user ID and CSRF token
-      // In a real implementation, this would include the user ID from the session
-      const userId = 'user_123'; // Replace with actual user ID
       const csrfToken = Math.random().toString(36).substring(2);
-      const state = `${userId}:${csrfToken}`;
+      const state = `${user.id}:${csrfToken}`;
       
       // Redirect to OAuth authorization URL
-      // In a real implementation, this would be a proper OAuth flow
       const authUrl = `/api/plugin-engine/oauth/authorize?tool=${toolName}&state=${state}`;
       window.location.href = authUrl;
     } catch (err) {
@@ -142,10 +180,16 @@ export default function IntegrationsPage() {
   
   // Disconnect an integration
   const handleDisconnect = async (toolName: string) => {
+    if (!session) {
+      toast.error('You must be logged in to disconnect integrations');
+      return;
+    }
+
     try {
       const response = await fetch('/api/plugin-engine/integrations', {
         method: 'DELETE',
         headers: {
+          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ toolName })
@@ -170,6 +214,44 @@ export default function IntegrationsPage() {
       toast.error(`Failed to disconnect from ${toolName}`);
     }
   };
+
+  // Show loading state while auth is loading
+  if (authLoading) {
+    return (
+      <div className="container py-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
+          <p className="text-muted-foreground">
+            Connect your agent to external services and tools
+          </p>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  // Show auth required message if not authenticated
+  if (!user) {
+    return (
+      <div className="container py-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
+          <p className="text-muted-foreground">
+            Connect your agent to external services and tools
+          </p>
+        </div>
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Authentication Required</AlertTitle>
+          <AlertDescription>
+            Please sign in to view and manage your integrations.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
   
   return (
     <div className="container py-6 space-y-6">

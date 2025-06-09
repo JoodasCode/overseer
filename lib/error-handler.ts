@@ -1,11 +1,16 @@
 /**
- * Error Handler
- * 
- * Centralized error handling and logging utility for the Overseer platform.
- * Following Airbnb Style Guide for code formatting.
+ * Error Handler Utility
+ * Handles error logging with context and optional database storage
+ * Updated to use Supabase instead of Prisma to avoid connection conflicts
  */
 
-import prisma from './db/prisma';
+import { createClient } from '@supabase/supabase-js';
+
+// Create Supabase client for error logging
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export interface ErrorDetails {
   error: Error;
@@ -87,7 +92,7 @@ export class ErrorHandler {
   }
   
   /**
-   * Handle an error by logging it and optionally reporting it
+   * Handle an error by logging it and optionally reporting it to Supabase
    * 
    * @param details - Error details including the error object, source, and optional metadata
    * @returns The created error log ID
@@ -110,10 +115,11 @@ export class ErrorHandler {
     });
 
     try {
-      // Log to database if userId is provided
+      // Log to Supabase database if userId is provided
       if (userId) {
-        const errorLog = await prisma.errorLog.create({
-          data: {
+        const { data: errorLog, error: logError } = await supabase
+          .from('ErrorLog')
+          .insert({
             user_id: userId,
             agent_id: agentId,
             error_type: error.name || 'Error',
@@ -123,10 +129,15 @@ export class ErrorHandler {
               source,
               ...metadata,
             },
-          },
-        });
+          })
+          .select('id')
+          .single();
 
-        return errorLog.id;
+        if (logError) {
+          throw logError;
+        }
+
+        return errorLog?.id || '';
       }
     } catch (logError) {
       // If logging to the database fails, just log to console
@@ -158,13 +169,6 @@ export class ErrorHandler {
     // Additional audit logging logic can be added here
     // For example, logging to a separate audit log table
   }
-  
-  /**
-   * Creates a custom error with extended properties
-   * 
-   * @param options - Options for creating the custom error
-   * @returns An Error object with extended properties
-   */
   
   /**
    * Instance method to log an error with context

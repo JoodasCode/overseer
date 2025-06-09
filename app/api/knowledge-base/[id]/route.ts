@@ -9,14 +9,14 @@ import { isValidUUID, createErrorResponse } from '@/lib/api-utils/validation';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authenticate user
     const { user, errorResponse } = await authenticate(req);
     if (errorResponse) return errorResponse;
     
-    const id = params.id;
+    const { id } = await params;
     
     // Validate UUID format
     if (!isValidUUID(id)) {
@@ -61,14 +61,14 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authenticate user
     const { user, errorResponse } = await authenticate(req);
     if (errorResponse) return errorResponse;
     
-    const id = params.id;
+    const { id } = await params;
     
     // Validate UUID format
     if (!isValidUUID(id)) {
@@ -155,14 +155,14 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authenticate user
     const { user, errorResponse } = await authenticate(req);
     if (errorResponse) return errorResponse;
     
-    const id = params.id;
+    const { id } = await params;
     
     // Validate UUID format
     if (!isValidUUID(id)) {

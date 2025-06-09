@@ -24,19 +24,37 @@ export interface MemoryLog {
 
 export interface Agent {
   id: string
+  user_id: string
   name: string
-  role: string
-  avatar: string
-  persona: string
+  description: string
+  avatar_url: string
   tools: string[]
-  level: number
-  status: "active" | "idle" | "offline"
-  lastActive: string
-  tasks: Task[]
-  memory: AgentMemory
-  joinedDate: string
-  totalTasksCompleted: number
-  favoriteTools: string[]
+  stats: Record<string, any>
+  preferences: Record<string, any>
+  metadata: Record<string, any>
+  created_at: string
+  updated_at: string
+  system_prompt: string
+  personality: string
+  llm_provider?: string
+  llm_model?: string
+  llm_api_key_id?: string
+  llm_config?: Record<string, any>
+  
+  // Computed/compatibility properties
+  role?: string
+  avatar?: string
+  persona?: string
+  level?: number
+  status?: "active" | "idle" | "offline" | "collaborating"
+  lastActive?: string
+  tasks?: Task[]
+  memory?: AgentMemory
+  joinedDate?: string
+  totalTasksCompleted?: number
+  favoriteTools?: string[]
+  department?: string
+  collaborating?: boolean
 }
 
 export interface LLMProvider {
@@ -106,4 +124,33 @@ export interface KnowledgeBaseItem {
   metadata?: any
   createdAt: string
   updatedAt: string
+}
+
+export interface AgentMode {
+  id: string;
+  agent_id: string;
+  mode_name: string;
+  tone_override?: string;
+  tool_preferences?: Record<string, any>;
+  response_length?: 'brief' | 'normal' | 'detailed';
+  priority_threshold?: number;
+  is_active: boolean;
+  activated_at?: string;
+  activated_by?: string;
+  created_at: string;
+}
+
+export interface SharedAgentMemory {
+  id: string;
+  from_agent_id: string;
+  to_agent_id: string;
+  memory_type: string;
+  content: string;
+  context?: string;
+  shared_at: string;
+  context_expires_at?: string;
+  from_agent?: {
+    name: string;
+    avatar: string;
+  };
 }

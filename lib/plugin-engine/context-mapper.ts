@@ -6,19 +6,13 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { Redis } from '@upstash/redis';
 import { ContextMapping } from './types';
+import { getRedisClient } from '../redis-client';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
 
 export class ContextMapper {
   private static instance: ContextMapper;
@@ -60,13 +54,13 @@ export class ContextMapper {
 
     // Cache in Redis for quick lookups
     const cacheKey = this.getCacheKey(mapping.agentId, mapping.tool, mapping.contextKey);
-    await redis.set(cacheKey, mapping.externalId);
+    await getRedisClient().set(cacheKey, mapping.externalId);
     
     // Set expiry if provided
     if (mapping.expiresAt) {
       const expiryMs = new Date(mapping.expiresAt).getTime() - Date.now();
       if (expiryMs > 0) {
-        await redis.expire(cacheKey, Math.floor(expiryMs / 1000));
+        await getRedisClient().expire(cacheKey, Math.floor(expiryMs / 1000));
       }
     }
 
@@ -83,7 +77,7 @@ export class ContextMapper {
   public async getExternalId(agentId: string, tool: string, contextKey: string): Promise<string | null> {
     // Try Redis cache first
     const cacheKey = this.getCacheKey(agentId, tool, contextKey);
-    const cachedId = await redis.get<string>(cacheKey);
+    const cachedId = await getRedisClient().get<string>(cacheKey);
     
     if (cachedId) {
       return cachedId;
@@ -108,7 +102,7 @@ export class ContextMapper {
     }
     
     // Update cache
-    await redis.set(cacheKey, data.externalId);
+    await getRedisClient().set(cacheKey, data.externalId);
     
     return data.externalId;
   }
@@ -123,7 +117,7 @@ export class ContextMapper {
   public async getContextKey(agentId: string, tool: string, externalId: string): Promise<string | null> {
     // Try Redis cache first (using reverse lookup)
     const reverseCacheKey = this.getReverseCacheKey(agentId, tool, externalId);
-    const cachedKey = await redis.get<string>(reverseCacheKey);
+    const cachedKey = await getRedisClient().get<string>(reverseCacheKey);
     
     if (cachedKey) {
       return cachedKey;
@@ -148,7 +142,7 @@ export class ContextMapper {
     }
     
     // Update cache
-    await redis.set(reverseCacheKey, data.contextKey);
+    await getRedisClient().set(reverseCacheKey, data.contextKey);
     
     return data.contextKey;
   }
@@ -190,25 +184,23 @@ export class ContextMapper {
     const cacheKey = this.getCacheKey(currentMapping.agentId, currentMapping.tool, currentMapping.contextKey);
     
     if (updates.externalId) {
-      await redis.set(cacheKey, updates.externalId);
+      await getRedisClient().set(cacheKey, updates.externalId);
       
       // Update reverse lookup cache
       const reverseCacheKey = this.getReverseCacheKey(currentMapping.agentId, currentMapping.tool, updates.externalId);
-      await redis.set(reverseCacheKey, currentMapping.contextKey);
+      await getRedisClient().set(reverseCacheKey, currentMapping.contextKey);
     }
     
     // Update expiry if provided
     if (updates.expiresAt) {
       const expiryMs = new Date(updates.expiresAt).getTime() - Date.now();
       if (expiryMs > 0) {
-        await redis.expire(cacheKey, Math.floor(expiryMs / 1000));
+        await getRedisClient().expire(cacheKey, Math.floor(expiryMs / 1000));
       }
     }
     
     return true;
   }
-
-
 
   /**
    * List all context mappings for an agent and tool
@@ -269,8 +261,8 @@ export class ContextMapper {
       const reverseCacheKey = this.getReverseCacheKey(mapping.agentId, mapping.tool, mapping.externalId);
       
       return Promise.all([
-        redis.set(cacheKey, mapping.externalId),
-        redis.set(reverseCacheKey, mapping.contextKey)
+        getRedisClient().set(cacheKey, mapping.externalId),
+        getRedisClient().set(reverseCacheKey, mapping.contextKey)
       ]);
     });
     
@@ -299,7 +291,7 @@ export class ContextMapper {
   public async getMapping(agentId: string, tool: string, contextKey: string): Promise<ContextMapping | undefined> {
     // Try Redis cache for externalId
     const cacheKey = this.getCacheKey(agentId, tool, contextKey);
-    const cachedExternalId = await redis.get<string>(cacheKey);
+    const cachedExternalId = await getRedisClient().get<string>(cacheKey);
     if (cachedExternalId) {
       // Try to get the rest from Supabase
       const { data, error } = await supabase
@@ -328,10 +320,8 @@ export class ContextMapper {
       return undefined;
     }
     if (data) {
-      // Update cache
-      await redis.set(cacheKey, data.externalId);
-      const reverseCacheKey = this.getReverseCacheKey(agentId, tool, data.externalId);
-      await redis.set(reverseCacheKey, contextKey);
+      // Cache the result
+      await getRedisClient().set(cacheKey, data.externalId);
     }
     return data || undefined;
   }
@@ -367,8 +357,8 @@ export class ContextMapper {
       const reverseCacheKey = this.getReverseCacheKey(mapping.agentId, mapping.tool, mapping.externalId);
       
       await Promise.all([
-        redis.set(cacheKey, mapping.externalId),
-        redis.set(reverseCacheKey, mapping.contextKey)
+        getRedisClient().set(cacheKey, mapping.externalId),
+        getRedisClient().set(reverseCacheKey, mapping.contextKey)
       ]);
 
       return true;
@@ -418,11 +408,11 @@ export class ContextMapper {
 
       // Clear from cache
       const cacheKey = this.getCacheKey(agentId, tool, contextKey);
-      await redis.del(cacheKey);
+      await getRedisClient().del(cacheKey);
       
       // Clear reverse lookup cache
       const reverseCacheKey = this.getReverseCacheKey(agentId, tool, mapping.externalId);
-      await redis.del(reverseCacheKey);
+      await getRedisClient().del(reverseCacheKey);
 
       return true;
     } else {
@@ -454,11 +444,11 @@ export class ContextMapper {
       
       // Clear from cache
       const cacheKey = this.getCacheKey(mapping.agentId, mapping.tool, mapping.contextKey);
-      await redis.del(cacheKey);
+      await getRedisClient().del(cacheKey);
       
       // Clear reverse lookup cache
       const reverseCacheKey = this.getReverseCacheKey(mapping.agentId, mapping.tool, mapping.externalId);
-      await redis.del(reverseCacheKey);
+      await getRedisClient().del(reverseCacheKey);
       
       return true;
     }

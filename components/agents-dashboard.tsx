@@ -14,6 +14,7 @@ import { ErrorMonitoringDashboard } from "@/components/error-monitoring-dashboar
 import { AgentHealthMonitor } from "@/components/agent-health-monitor"
 import { WorkflowBuilder } from "@/components/workflow-builder"
 import { TemplateMarketplace } from "@/components/template-marketplace"
+import { DepartmentOverview } from "@/components/communications-dept/department-overview"
 import { TopBar } from "@/components/top-bar"
 import { HireAgentModal } from "@/components/hire-agent-modal"
 import { ProtectedRoute } from "@/components/auth/protected-route"
@@ -44,6 +45,7 @@ export default function AgentsDashboard() {
     | "health"
     | "workflows"
     | "templates"
+    | "communications-dept"
   >("dashboard")
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
 
@@ -64,6 +66,24 @@ export default function AgentsDashboard() {
 
   const handleHireAgent = () => {
     setShowHireAgent(true)
+  }
+
+  const handleShowCommunicationsDept = () => {
+    setCurrentPage("communications-dept")
+  }
+
+  // Create a callback for agent hiring that refreshes the data
+  const handleAgentHired = async () => {
+    setShowHireAgent(false)
+    setJustHiredAgent(true) // Prevent empty state flash
+    // Add a small delay to ensure database has been updated
+    setTimeout(async () => {
+      await refetchAgents()
+      // Reset the flag after a longer delay to allow data to settle
+      setTimeout(() => {
+        setJustHiredAgent(false)
+      }, 1000)
+    }, 500)
   }
 
   const renderCurrentPage = () => {
@@ -167,9 +187,11 @@ export default function AgentsDashboard() {
 
     switch (currentPage) {
       case "dashboard":
-        return <DashboardOverview agents={agentsData} onSelectAgent={handleViewAgentProfile} />
+        return <DashboardOverview agents={agentsData} onSelectAgent={handleViewAgentProfile} onAgentHired={handleAgentHired} onShowCommunicationsDept={handleShowCommunicationsDept} />
+      case "communications-dept":
+        return <DepartmentOverview onViewAgent={handleViewAgentProfile} />
       case "agents":
-        return <AgentPage agents={agentsData} selectedAgent={selectedAgent || agentsData[0]} onSelectAgent={setSelectedAgent} />
+        return <AgentPage agents={agentsData} selectedAgent={selectedAgent || agentsData[0]} onSelectAgent={setSelectedAgent} onAgentHired={handleAgentHired} />
       case "analytics":
         return <AnalyticsPage agents={agentsData} />
       case "automations":
@@ -209,18 +231,7 @@ export default function AgentsDashboard() {
           <HireAgentModal 
             isOpen={showHireAgent} 
             onClose={() => setShowHireAgent(false)}
-            onAgentHired={async () => {
-              setShowHireAgent(false)
-              setJustHiredAgent(true) // Prevent empty state flash
-              // Add a small delay to ensure database has been updated
-              setTimeout(async () => {
-                await refetchAgents()
-                // Reset the flag after a longer delay to allow data to settle
-                setTimeout(() => {
-                  setJustHiredAgent(false)
-                }, 1000)
-              }, 500)
-            }}
+            onAgentHired={handleAgentHired}
           />
         )}
       </SidebarProvider>

@@ -17,6 +17,7 @@ import {
   StorageStats,
 } from './types';
 import { S3Provider } from './s3-provider';
+import { SupabaseProvider } from './supabase-provider';
 import { ErrorHandler } from '../error-handler';
 import prisma from '../db/prisma';
 
@@ -35,6 +36,7 @@ const DEFAULT_PRESIGNED_URL_OPTIONS: PresignedUrlOptions = {
 export class StorageService {
   private config: StorageConfig;
   private s3Provider?: S3Provider;
+  private supabaseProvider?: SupabaseProvider;
   private errorHandler: ErrorHandler;
 
   constructor(config: StorageConfig, errorHandler: ErrorHandler) {
@@ -44,6 +46,8 @@ export class StorageService {
     // Initialize the appropriate client based on the provider
     if (config.provider === StorageProvider.S3) {
       this.s3Provider = new S3Provider(config, errorHandler);
+    } else if (config.provider === StorageProvider.SUPABASE) {
+      this.supabaseProvider = new SupabaseProvider(config, errorHandler);
     } else if (config.provider === StorageProvider.LOCAL) {
       // Ensure the local storage directory exists
       if (config.localPath) {
@@ -103,6 +107,8 @@ export class StorageService {
         await this.uploadToLocalStorage(file, filePath);
       } else if (this.config.provider === StorageProvider.S3) {
         url = await this.uploadToS3(file, filePath, mimeType, mergedOptions.isPublic);
+      } else if (this.config.provider === StorageProvider.SUPABASE) {
+        url = await this.uploadToSupabase(file, filePath, mimeType, mergedOptions.isPublic);
       }
 
       // Create file metadata
@@ -195,6 +201,8 @@ export class StorageService {
         buffer = await this.getFromLocalStorage(metadata.path);
       } else if (metadata.provider === StorageProvider.S3) {
         buffer = await this.getFromS3(metadata.path);
+      } else if (metadata.provider === StorageProvider.SUPABASE) {
+        buffer = await this.getFromSupabase(metadata.path);
       } else {
         throw new Error(`Unsupported storage provider: ${metadata.provider}`);
       }
@@ -239,6 +247,8 @@ export class StorageService {
         await this.deleteFromLocalStorage(fileRecord.path);
       } else if (fileRecord.provider === StorageProvider.S3) {
         await this.deleteFromS3(fileRecord.path);
+      } else if (fileRecord.provider === StorageProvider.SUPABASE) {
+        await this.deleteFromSupabase(fileRecord.path);
       }
 
       // Delete metadata from database
@@ -272,20 +282,25 @@ export class StorageService {
     options: PresignedUrlOptions = {},
   ): Promise<{ url: string; fileId: string; fields?: Record<string, string>; expiresAt: Date }> {
     try {
-      // Only supported for S3 provider
-      if (this.config.provider !== StorageProvider.S3) {
-        throw new Error('Presigned URLs are only supported for S3 storage');
-      }
-
-      if (!this.s3Provider) {
-        throw new Error('S3 provider not initialized');
-      }
-
       // Merge with default options
       const mergedOptions = { ...DEFAULT_PRESIGNED_URL_OPTIONS, ...options };
       
-      // Generate presigned URL using the S3 provider
-      return this.s3Provider.generatePresignedUploadUrl(fileName, ownerId, mergedOptions);
+      // Generate presigned URL based on provider
+      if (this.config.provider === StorageProvider.S3) {
+        if (!this.s3Provider) {
+          throw new Error('S3 provider not initialized');
+        }
+        return this.s3Provider.generatePresignedUploadUrl(fileName, ownerId, mergedOptions);
+      } else if (this.config.provider === StorageProvider.SUPABASE) {
+        if (!this.supabaseProvider) {
+          throw new Error('Supabase provider not initialized');
+        }
+        // Use public bucket for presigned uploads by default
+        const bucket = 'public-files';
+        return this.supabaseProvider.generatePresignedUploadUrl(bucket, fileName, ownerId, mergedOptions);
+      } else {
+        throw new Error(`Presigned URLs are not supported for ${this.config.provider} storage`);
+      }
     } catch (error) {
       this.errorHandler.handle({
         error: error as Error,
@@ -312,17 +327,17 @@ export class StorageService {
 
       // Calculate statistics
       const totalFiles = files.length;
-      const totalSize = files.reduce((sum: number, file) => sum + file.size, 0);
+      const totalSize = files.reduce((sum: number, file: any) => sum + file.size, 0);
       
       // Calculate usage by provider
-      const usageByProvider = files.reduce((acc: Record<string, number>, file) => {
+      const usageByProvider = files.reduce((acc: Record<string, number>, file: any) => {
         const provider = file.provider as StorageProvider;
         acc[provider] = (acc[provider] || 0) + file.size;
         return acc;
       }, {} as Record<string, number>);
       
       // Calculate usage by MIME type
-      const usageByMimeType = files.reduce((acc: Record<string, number>, file) => {
+      const usageByMimeType = files.reduce((acc: Record<string, number>, file: any) => {
         acc[file.mimeType] = (acc[file.mimeType] || 0) + file.size;
         return acc;
       }, {} as Record<string, number>);
@@ -433,6 +448,68 @@ export class StorageService {
     const success = await this.s3Provider.deleteFile(filePath);
     if (!success) {
       throw new Error(`Failed to delete file from S3: ${filePath}`);
+    }
+  }
+
+  /**
+   * Upload a file to Supabase Storage
+   * 
+   * @param file - The file buffer to upload
+   * @param filePath - The path to save the file to
+   * @param mimeType - The MIME type of the file
+   * @param isPublic - Whether the file should be publicly accessible
+   * @returns The URL of the uploaded file
+   */
+  private async uploadToSupabase(
+    file: Buffer,
+    filePath: string,
+    mimeType: string,
+    isPublic: boolean = false,
+  ): Promise<string> {
+    if (!this.supabaseProvider) {
+      throw new Error('Supabase provider not initialized');
+    }
+    
+    // Use a default bucket - we'll need to create this
+    const bucket = isPublic ? 'public-files' : 'private-files';
+    return this.supabaseProvider.uploadFile(file, bucket, filePath, mimeType, isPublic);
+  }
+
+  /**
+   * Get a file from Supabase Storage
+   * 
+   * @param filePath - The path of the file to get
+   * @returns The file buffer
+   */
+  private async getFromSupabase(filePath: string): Promise<Buffer> {
+    if (!this.supabaseProvider) {
+      throw new Error('Supabase provider not initialized');
+    }
+    
+    // Extract bucket and key from the path
+    const [bucket, ...keyParts] = filePath.split('/');
+    const key = keyParts.join('/');
+    
+    return this.supabaseProvider.getFile(bucket, key);
+  }
+
+  /**
+   * Delete a file from Supabase Storage
+   * 
+   * @param filePath - The path of the file to delete
+   */
+  private async deleteFromSupabase(filePath: string): Promise<void> {
+    if (!this.supabaseProvider) {
+      throw new Error('Supabase provider not initialized');
+    }
+    
+    // Extract bucket and key from the path
+    const [bucket, ...keyParts] = filePath.split('/');
+    const key = keyParts.join('/');
+    
+    const success = await this.supabaseProvider.deleteFile(bucket, key);
+    if (!success) {
+      throw new Error(`Failed to delete file from Supabase Storage: ${filePath}`);
     }
   }
 

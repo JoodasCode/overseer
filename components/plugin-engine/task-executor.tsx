@@ -33,6 +33,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
+import { safeJsonParse } from '@/lib/utils/safe-json';
 
 // Form schema for task execution
 const taskSchema = z.object({
@@ -192,17 +193,15 @@ export function TaskExecutor() {
     
     try {
       // Parse the context string to JSON
-      let contextObj;
-      try {
-        contextObj = JSON.parse(data.context);
-      } catch (err) {
+      const contextObj = safeJsonParse(data.context, null);
+      if (contextObj === null) {
         toast.error('Invalid JSON in context field');
         setIsSubmitting(false);
         return;
       }
       
       // Create the task intent payload
-      const payload = {
+      const payload: any = {
         tool: data.tool,
         intent: data.intent,
         context: contextObj,
@@ -238,7 +237,7 @@ export function TaskExecutor() {
       );
     } catch (err) {
       console.error('Error executing task:', err);
-      toast.error(err.message || 'Failed to execute task');
+      toast.error(err instanceof Error ? err.message : 'Failed to execute task');
     } finally {
       setIsSubmitting(false);
     }

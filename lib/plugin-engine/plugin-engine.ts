@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { Redis } from '@upstash/redis';
+import { getRedisClient } from '../redis-client';
 import { Scheduler } from './scheduler';
 import { ErrorHandler } from './error-handler';
 import { IntegrationManager } from './integration-manager';
@@ -17,12 +17,6 @@ import { PluginAdapter, TaskIntent, ScheduledTask, PluginResult, ErrorLog } from
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
 
 export class PluginEngine {
   private static instance: PluginEngine;
@@ -200,6 +194,7 @@ export class PluginEngine {
    * Cache successful results
    */
   private async cacheResult(intent: TaskIntent, result: PluginResult): Promise<void> {
+    const redis = getRedisClient();
     const cacheKey = `result:${intent.agentId}:${intent.tool}:${intent.intent}`;
     
     // Cache for 5 minutes
