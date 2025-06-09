@@ -1,10 +1,18 @@
 "use client"
 
-import { Bell, Search, User } from "lucide-react"
+import { Bell, Search, User, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/lib/auth/supabase-auth-provider"
 
 export function TopBar() {
+  const { user, signOut } = useAuth()
+
+  const handleSignOut = async () => {
+    await signOut()
+  }
+
   return (
     <div className="border-b border-pixel bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 items-center px-6 space-x-4">
@@ -22,9 +30,27 @@ export function TopBar() {
           <Button variant="ghost" size="sm" className="font-clean text-sm">
             <Bell className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="font-clean text-sm">
-            <User className="w-4 h-4" />
-          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="font-clean text-sm">
+                <User className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 border-pixel">
+              <div className="px-2 py-1.5">
+                <p className="font-pixel text-xs text-primary">Signed in as</p>
+                <p className="font-clean text-sm text-muted-foreground truncate">
+                  {user?.email || 'Loading...'}
+                </p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="font-pixel text-xs">
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>

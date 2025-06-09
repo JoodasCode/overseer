@@ -7,10 +7,13 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmojiSelector } from "./emoji-selector"
 import { Star, Users, ChevronLeft, ChevronRight } from "lucide-react"
+import { useAuth } from "@/lib/auth/supabase-auth-provider"
+import { useToast } from "@/lib/hooks/use-toast"
 
 interface HireAgentModalProps {
   isOpen: boolean
   onClose: () => void
+  onAgentHired?: () => void
 }
 
 const availableAgents = [
@@ -49,10 +52,13 @@ const availableAgents = [
   },
 ]
 
-export function HireAgentModal({ isOpen, onClose }: HireAgentModalProps) {
+export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModalProps) {
+  const { session } = useAuth()
+  const { toast } = useToast()
   const [step, setStep] = useState<"select" | "customize">("select")
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [selectedEmoji, setSelectedEmoji] = useState<string>("")
+  const [isHiring, setIsHiring] = useState(false)
 
   const currentAgent = availableAgents.find((a) => a.id === selectedAgent)
 
@@ -74,17 +80,112 @@ export function HireAgentModal({ isOpen, onClose }: HireAgentModalProps) {
     setStep("select")
   }
 
-  const handleHire = () => {
-    if (selectedAgent && selectedEmoji) {
-      console.log("Hiring agent:", {
-        ...currentAgent,
+  const handleHire = async () => {
+    if (selectedAgent && selectedEmoji && currentAgent && session?.access_token) {
+      setIsHiring(true);
+      
+      // Create optimistic agent data for immediate UI update
+      const optimisticAgent = {
+        id: `temp-${Date.now()}`, // Temporary ID
+        name: currentAgent.name,
+        role: currentAgent.role,
         avatar: selectedEmoji,
-      })
-      // Reset state
-      setStep("select")
-      setSelectedAgent(null)
-      setSelectedEmoji("")
-      onClose()
+        persona: currentAgent.persona,
+        tools: currentAgent.tools,
+        level: currentAgent.level,
+        status: "active" as const,
+        lastActive: "just now",
+        joinedDate: new Date().toISOString().split('T')[0],
+        totalTasksCompleted: 0,
+        favoriteTools: currentAgent.tools.slice(0, 2),
+        tasks: [],
+        memory: {
+          weeklyGoals: "Getting started",
+          recentLearnings: [],
+          preferences: [currentAgent.persona],
+          skillsUnlocked: [],
+          memoryLogs: [],
+        },
+      };
+
+      try {
+        // Create the agent via API
+        const response = await fetch('/api/agents', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            name: currentAgent.name,
+            description: currentAgent.description,
+            avatar_url: selectedEmoji,
+            tools: currentAgent.tools.reduce((acc, tool) => ({ ...acc, [tool.toLowerCase()]: true }), {}),
+            preferences: {
+              persona: currentAgent.persona,
+              specialty: currentAgent.specialty,
+              level: currentAgent.level
+            },
+            metadata: {
+              role: currentAgent.role,
+              defaultAvatar: currentAgent.defaultAvatar,
+              hired_at: new Date().toISOString()
+            }
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log("✅ Agent hired successfully:", result.agent);
+          
+          // Show success toast notification
+          toast({
+            variant: "success",
+            title: "🎉 Agent Hired Successfully!",
+            description: `${currentAgent.name} has joined your team and is ready to work.`,
+          });
+          
+          // Reset state
+          setStep("select")
+          setSelectedAgent(null)
+          setSelectedEmoji("")
+          
+          // Call the callback to refetch agents and close modal
+          if (onAgentHired) {
+            // Add a small delay to ensure the database transaction is complete
+            setTimeout(() => {
+              onAgentHired()
+            }, 300)
+          } else {
+            onClose()
+            // Fallback to page refresh if no callback provided
+            setTimeout(() => {
+              window.location.reload()
+            }, 300)
+          }
+        } else {
+          const error = await response.json();
+          console.error("❌ Failed to hire agent:", error);
+          
+          // Show error toast notification
+          toast({
+            variant: "destructive",
+            title: "❌ Failed to Hire Agent",
+            description: error.error || 'An unexpected error occurred. Please try again.',
+          });
+        }
+      } catch (error) {
+        console.error("❌ Error hiring agent:", error);
+        
+        // Show error toast notification
+        toast({
+          variant: "destructive",
+          title: "❌ Network Error",
+          description: "Failed to hire agent. Please check your connection and try again.",
+        });
+      } finally {
+        setIsHiring(false);
+      }
     }
   }
 
@@ -191,9 +292,9 @@ export function HireAgentModal({ isOpen, onClose }: HireAgentModalProps) {
                 <ChevronLeft className="w-3 h-3 mr-1" />
                 Back
               </Button>
-              <Button onClick={handleHire} disabled={!selectedEmoji} className="flex-1 font-pixel text-xs">
+              <Button onClick={handleHire} disabled={!selectedEmoji || isHiring} className="flex-1 font-pixel text-xs">
                 <Users className="w-3 h-3 mr-1" />
-                Hire Agent
+                {isHiring ? "Hiring..." : "Hire Agent"}
               </Button>
             </div>
           </div>

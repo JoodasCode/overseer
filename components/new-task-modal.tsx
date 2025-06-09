@@ -146,7 +146,7 @@ export function NewTaskModal({ isOpen, onClose, agents, selectedAgentId, onCreat
                   ))}
                 </SelectContent>
               </Select>
-              {selectedAgent && (
+              {selectedAgent && selectedAgent.memory && selectedAgent.memory.preferences && (
                 <div className="bg-muted/50 p-2 rounded border-pixel">
                   <div className="text-xs font-clean">
                     <span className="font-pixel">Specialties:</span>

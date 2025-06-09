@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { supabase } from '@/lib/supabase-client';
+import { createClient } from '@supabase/supabase-js';
 import { ErrorHandler } from '@/lib/error-handler';
+
+// Create Supabase client for server-side operations
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 interface AgentCreateRequest {
   name: string;
@@ -27,8 +32,19 @@ interface AgentUpdateRequest {
  */
 export async function GET(req: NextRequest) {
   try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Get user from the Authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Missing or invalid authorization header' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.substring(7);
+    
+    // Verify the JWT token and get user
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
       return NextResponse.json(
@@ -44,38 +60,37 @@ export async function GET(req: NextRequest) {
     const sort = url.searchParams.get('sort') || 'created_at';
     const order = url.searchParams.get('order') || 'desc';
     
-    // Query agents table using Prisma for better type safety
+    // Query agents table using Supabase
     try {
       // Get total count
-      const totalCount = await prisma.agent.count({
-        where: {
-          user_id: user.id
-        }
-      });
-      
+      const { count, error: countError } = await supabase
+        .from('Agent')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      if (countError) {
+        throw new Error(`Count query failed: ${countError.message}`);
+      }
+
       // Get agents with pagination and sorting
-      const agents = await prisma.agent.findMany({
-        where: {
-          user_id: user.id
-        },
-        orderBy: {
-          [sort]: order === 'asc' ? 'asc' : 'desc'
-        },
-        skip: offset,
-        take: limit,
-        include: {
-          // Include related data if needed
-          agentMemory: false // Set to true if you want to include memory
-        }
-      });
+      const { data: agents, error: agentsError } = await supabase
+        .from('Agent')
+        .select('*')
+        .eq('user_id', user.id)
+        .order(sort, { ascending: order === 'asc' })
+        .range(offset, offset + limit - 1);
+
+      if (agentsError) {
+        throw new Error(`Agents query failed: ${agentsError.message}`);
+      }
       
       return NextResponse.json({
-        agents,
+        agents: agents || [],
         pagination: {
-          total: totalCount,
+          total: count || 0,
           limit,
           offset,
-          hasMore: offset + limit < totalCount,
+          hasMore: offset + limit < (count || 0),
         },
       });
     } catch (dbError) {
@@ -113,8 +128,19 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Get user from the Authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Missing or invalid authorization header' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.substring(7);
+    
+    // Verify the JWT token and get user
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
       return NextResponse.json(
@@ -160,10 +186,11 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // Create new agent using Prisma for better type safety
+    // Create new agent using Supabase
     try {
-      const agent = await prisma.agent.create({
-        data: {
+      const { data: agent, error: agentError } = await supabase
+        .from('Agent')
+        .insert({
           user_id: user.id,
           name,
           description,
@@ -171,23 +198,34 @@ export async function POST(req: NextRequest) {
           tools: tools || {},
           preferences: preferences || {},
           metadata: metadata || {},
-        },
-      });
+        })
+        .select()
+        .single();
+
+      if (agentError) {
+        throw new Error(`Agent creation failed: ${agentError.message}`);
+      }
       
       // Create initial agent memory
-      await prisma.agentMemory.create({
-        data: {
+      const { error: memoryError } = await supabase
+        .from('AgentMemory')
+        .insert({
           agent_id: agent.id,
           key: 'system_prompt',
           value: 'I am a helpful AI assistant.',
           type: 'string',
+          embedding: [], // Empty array for now
           metadata: {
             importance: 10,
             category: 'system',
             goals: ['Learn about my user and be helpful']
           },
-        },
-      });
+        });
+
+      if (memoryError) {
+        console.warn('Failed to create initial agent memory:', memoryError.message);
+        // Don't fail the agent creation if memory creation fails
+      }
       
       return NextResponse.json({ agent }, { status: 201 });
     } catch (dbError) {
@@ -225,11 +263,11 @@ export async function POST(req: NextRequest) {
  */
 export async function OPTIONS() {
   return new NextResponse(null, {
-    status: 204,
+    status: 200,
     headers: {
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
     },
   });
 }

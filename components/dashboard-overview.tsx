@@ -15,17 +15,20 @@ interface DashboardOverviewProps {
 export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewProps) {
   const [showHireAgent, setShowHireAgent] = useState(false)
 
-  const totalTasks = agents.reduce((sum, agent) => sum + agent.tasks.length, 0)
-  const completedTasks = agents.reduce(
-    (sum, agent) => sum + agent.tasks.filter((t) => t.status === "completed").length,
+  // Ensure agents is always an array to prevent undefined errors
+  const safeAgents = agents || []
+
+  const totalTasks = safeAgents.reduce((sum, agent) => sum + (agent.tasks?.length || 0), 0)
+  const completedTasks = safeAgents.reduce(
+    (sum, agent) => sum + (agent.tasks?.filter((t) => t.status === "completed").length || 0),
     0,
   )
-  const activeAgents = agents.filter((agent) => agent.status === "active").length
-  const totalXP = agents.reduce((sum, agent) => sum + agent.level * 250, 0)
+  const activeAgents = safeAgents.filter((agent) => agent.status === "active").length
+  const totalXP = safeAgents.reduce((sum, agent) => sum + (agent.level || 0) * 250, 0)
 
-  const recentActivity = agents
+  const recentActivity = safeAgents
     .flatMap((agent) =>
-      agent.tasks
+      (agent.tasks || [])
         .filter((task) => task.status === "completed")
         .map((task) => ({
           agent,
@@ -64,7 +67,7 @@ export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewPr
             <Users className="w-4 h-4 text-primary" />
           </div>
           <div className="text-2xl font-pixel text-foreground">{activeAgents}</div>
-          <p className="text-xs text-muted-foreground font-clean">of {agents.length} total</p>
+          <p className="text-xs text-muted-foreground font-clean">of {safeAgents.length} total</p>
         </div>
 
         <div className="pixel-card p-4">
@@ -101,11 +104,11 @@ export function DashboardOverview({ agents, onSelectAgent }: DashboardOverviewPr
           <div className="pixel-card p-6">
             <h3 className="font-pixel text-sm text-primary mb-4">Agent Status</h3>
             <div className="space-y-4">
-              {agents.map((agent) => {
-                const completedToday = agent.tasks.filter((t) => t.status === "completed").length
-                const inProgress = agent.tasks.filter((t) => t.status === "in-progress").length
-                const pending = agent.tasks.filter((t) => t.status === "pending").length
-                const totalTasks = agent.tasks.length
+              {safeAgents.map((agent) => {
+                const completedToday = (agent.tasks || []).filter((t) => t.status === "completed").length
+                const inProgress = (agent.tasks || []).filter((t) => t.status === "in-progress").length
+                const pending = (agent.tasks || []).filter((t) => t.status === "pending").length
+                const totalTasks = (agent.tasks || []).length
                 const progress = totalTasks > 0 ? (completedToday / totalTasks) * 100 : 0
 
                 return (

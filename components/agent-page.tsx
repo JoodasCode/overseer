@@ -32,12 +32,45 @@ interface AgentPageProps {
   onSelectAgent: (agent: Agent) => void
 }
 
+// Helper function to safely convert tools to array format
+const getToolsArray = (tools: any): string[] => {
+  if (Array.isArray(tools)) {
+    return tools
+  }
+  if (tools && typeof tools === 'object') {
+    // If tools is an object, extract the keys or values
+    return Object.keys(tools).length > 0 ? Object.keys(tools) : []
+  }
+  return []
+}
+
+// Helper function to safely get tasks array
+const getTasksArray = (tasks: any): any[] => {
+  if (Array.isArray(tasks)) {
+    return tasks
+  }
+  return []
+}
+
+// Helper function to safely get memory learnings array
+const getMemoryLearningsArray = (memory: any): string[] => {
+  if (memory && Array.isArray(memory.recentLearnings)) {
+    return memory.recentLearnings
+  }
+  return []
+}
+
 export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPageProps) {
   const [activeTab, setActiveTab] = useState("tasks")
   const [showNewTask, setShowNewTask] = useState(false)
   const [showHireAgent, setShowHireAgent] = useState(false)
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [showChat, setShowChat] = useState(false)
+
+  // Safely get arrays from selectedAgent
+  const agentTools = getToolsArray(selectedAgent.tools)
+  const agentTasks = getTasksArray(selectedAgent.tasks)
+  const agentLearnings = getMemoryLearningsArray(selectedAgent.memory)
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -61,7 +94,7 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
       case "low":
         return "secondary"
       default:
-        return "secondary"
+        return "outline"
     }
   }
 
@@ -74,6 +107,7 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
     category: string
   }) => {
     console.log("Creating task:", taskData)
+    setShowNewTask(false)
   }
 
   // Calculate XP progress
@@ -175,14 +209,14 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {selectedAgent.memory.skillsUnlocked.slice(0, 3).map((skill, index) => (
+                  {(selectedAgent.memory?.skillsUnlocked || []).slice(0, 3).map((skill, index) => (
                     <Badge key={index} variant="outline" className="font-pixel text-xs">
                       {skill}
                     </Badge>
                   ))}
-                  {selectedAgent.memory.skillsUnlocked.length > 3 && (
+                  {(selectedAgent.memory?.skillsUnlocked || []).length > 3 && (
                     <Badge variant="outline" className="font-pixel text-xs">
-                      +{selectedAgent.memory.skillsUnlocked.length - 3} more
+                      +{(selectedAgent.memory?.skillsUnlocked || []).length - 3} more
                     </Badge>
                   )}
                 </div>
@@ -234,7 +268,7 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
             </Button>
           </div>
 
-          {selectedAgent.tasks.length === 0 ? (
+          {agentTasks.length === 0 ? (
             <Card className="border-pixel">
               <CardContent className="p-6 text-center">
                 <p className="text-muted-foreground">No active tasks for {selectedAgent.name}</p>
@@ -246,7 +280,7 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
             </Card>
           ) : (
             <div className="space-y-3">
-              {selectedAgent.tasks.map((task) => (
+              {agentTasks.map((task) => (
                 <Card key={task.id} className="border-pixel">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
@@ -284,22 +318,25 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
             <CardContent className="space-y-4">
               <div>
                 <h4 className="font-pixel text-xs mb-2">WEEKLY GOALS</h4>
-                <p className="text-sm">{selectedAgent.memory.weeklyGoals}</p>
+                <p className="text-sm">{selectedAgent.memory?.weeklyGoals || 'No weekly goals set'}</p>
               </div>
               <div>
                 <h4 className="font-pixel text-xs mb-2">RECENT LEARNINGS</h4>
                 <div className="space-y-2">
-                  {selectedAgent.memory.recentLearnings.map((learning, index) => (
+                  {agentLearnings.map((learning, index) => (
                     <div key={index} className="flex items-start text-sm">
                       <span className="text-primary mr-2">•</span>
                       <span>{learning}</span>
                     </div>
                   ))}
+                  {agentLearnings.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No recent learnings</p>
+                  )}
                 </div>
               </div>
               <div>
                 <h4 className="font-pixel text-xs mb-2">PERSONA</h4>
-                <p className="text-sm">{selectedAgent.persona}</p>
+                <p className="text-sm">{selectedAgent.persona || 'No persona defined'}</p>
               </div>
             </CardContent>
           </Card>
@@ -307,7 +344,7 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
 
         <TabsContent value="tools" className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {selectedAgent.tools.map((tool, index) => (
+            {agentTools.map((tool, index) => (
               <Card key={index} className="border-pixel">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -407,11 +444,11 @@ export function AgentPage({ agents, selectedAgent, onSelectAgent }: AgentPagePro
                 <AlertCircle className="w-3 h-3 text-yellow-500" />
                 <span className="flex-1 truncate">Waiting on event materials</span>
               </div>
-              {selectedAgent.tasks.filter((t) => t.status === "pending").length > 0 && (
+              {agentTasks.filter((t) => t.status === "pending").length > 0 && (
                 <div className="flex items-center space-x-2">
                   <Clock className="w-3 h-3 text-blue-500" />
                   <span className="flex-1 truncate">
-                    {selectedAgent.tasks.filter((t) => t.status === "pending").length} pending tasks
+                    {agentTasks.filter((t) => t.status === "pending").length} pending tasks
                   </span>
                 </div>
               )}

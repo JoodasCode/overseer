@@ -1,4 +1,5 @@
 import { Agent, Task, Workflow, WorkflowExecution, ChatMessage, KnowledgeBase, KnowledgeBaseItem } from './types'
+import { authTokenManager } from './auth-token-manager'
 
 // API Response types
 export interface ApiResponse<T = any> {
@@ -35,14 +36,32 @@ class ApiClient {
     this.retries = config.retries || 3
   }
 
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    try {
+      const token = await authTokenManager.getToken()
+      if (token) {
+        return {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to get auth token:', error)
+    }
+    return {}
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}/api${endpoint}`
     
+    // Get auth headers
+    const authHeaders = await this.getAuthHeaders()
+    
     const defaultHeaders = {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...options.headers,
     }
 

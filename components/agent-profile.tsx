@@ -41,7 +41,7 @@ export function AgentProfile({ agent, onBack }: AgentProfileProps) {
                 <div className="text-xs text-muted-foreground font-clean">Tasks Done</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-pixel text-foreground">{agent.memory.skillsUnlocked.length}</div>
+                <div className="text-2xl font-pixel text-foreground">{(agent.memory?.skillsUnlocked || []).length}</div>
                 <div className="text-xs text-muted-foreground font-clean">Skills</div>
               </div>
               <div className="text-center">
@@ -73,7 +73,7 @@ export function AgentProfile({ agent, onBack }: AgentProfileProps) {
               <h3 className="font-pixel text-sm text-primary">Skills Unlocked</h3>
             </div>
             <div className="space-y-2">
-              {agent.memory.skillsUnlocked.map((skill, index) => (
+              {(agent.memory?.skillsUnlocked || []).map((skill, index) => (
                 <div key={index} className="flex items-center space-x-2">
                   <Star className="w-3 h-3 text-yellow-500" />
                   <span className="font-clean text-sm">{skill}</span>

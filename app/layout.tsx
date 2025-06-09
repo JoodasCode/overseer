@@ -1,6 +1,8 @@
 import type React from "react"
 import "./globals.css"
 import type { Metadata } from "next"
+import { AuthProvider } from "@/lib/auth/supabase-auth-provider"
+import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
   title: "AGENTS OS - Build your AI team",
@@ -15,7 +17,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
+      </body>
     </html>
   )
 }
