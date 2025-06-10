@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
+// Create server-side Supabase client with service role key for JWT validation
+const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
 );
 
 interface MemoryCreateRequest {
@@ -24,103 +31,107 @@ interface SharedMemoryRequest {
 
 /**
  * GET /api/agents/[id]/memory
- * Retrieve agent memory entries
+ * Retrieve agent memory and context
  */
 export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Await params for Next.js 13+
-    const { id } = await params;
-    
-    const authHeader = req.headers.get('authorization');
+    const { id: agentId } = await params;
+
+    // Check authentication
+    const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Authentication required' },
         { status: 401 }
       );
     }
 
     const token = authHeader.substring(7);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Invalid authentication token' },
         { status: 401 }
       );
     }
 
-    // Verify agent belongs to user
-    const { data: agent, error: agentError } = await supabase
-      .from('agents')
-      .select('id, user_id')
-      .eq('id', id)
+    // Verify agent exists and user has access
+    const { data: agent, error: agentError } = await supabaseAdmin
+      .from('portal_agents')
+      .select('*')
+      .eq('id', agentId)
       .eq('user_id', user.id)
       .single();
 
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json(
-        { error: 'Agent not found' },
+        { error: 'Agent not found or access denied' },
         { status: 404 }
       );
     }
 
-    const url = new URL(req.url);
-    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
-    const category = url.searchParams.get('category');
-    const include_shared = url.searchParams.get('include_shared') === 'true';
-
-    // Get agent's own memory
-    let memoryQuery = supabase
-      .from('agent_memory')
+    // Get agent memory
+    const { data: memory, error: memoryError } = await supabaseAdmin
+      .from('portal_agent_memory')
       .select('*')
-      .eq('agent_id', id)
+      .eq('agent_id', agentId)
+      .single();
+
+    // Get recent chat history for context
+    const { data: recentChats, error: chatsError } = await supabaseAdmin
+      .from('portal_agent_logs')
+      .select('*')
+      .eq('agent_id', agentId)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(20);
 
-    if (category) {
-      memoryQuery = memoryQuery.eq('category', category);
-    }
-
-    const { data: memory, error: memoryError } = await memoryQuery;
-
-    if (memoryError) {
-      return NextResponse.json(
-        { error: 'Failed to fetch memory', details: memoryError.message },
-        { status: 500 }
-      );
-    }
-
-    let sharedMemory = [];
-    if (include_shared) {
-      // Get shared memory directed to this agent
-      const { data: shared, error: sharedError } = await supabase
-        .from('shared_agent_memory')
-        .select(`
-          *,
-          from_agent:agents!shared_agent_memory_from_agent_id_fkey(name, avatar)
-        `)
-        .eq('to_agent_id', id)
-        .or(`context_expires_at.is.null,context_expires_at.gt.${new Date().toISOString()}`)
-        .order('shared_at', { ascending: false })
-        .limit(10);
-
-      if (!sharedError) {
-        sharedMemory = shared || [];
-      }
-    }
+    // Get shared memory from other agents
+    const { data: sharedMemory, error: sharedError } = await supabaseAdmin
+      .from('shared_agent_memory')
+      .select(`
+        *,
+        from_agent:portal_agents!shared_agent_memory_from_agent_id_fkey(name, role)
+      `)
+      .eq('to_agent_id', agentId)
+      .eq('context_expires_at', null)
+      .order('created_at', { ascending: false })
+      .limit(10);
 
     return NextResponse.json({
-      memory: memory || [],
-      shared_memory: sharedMemory,
-      total: memory?.length || 0
+      success: true,
+      data: {
+        agent: {
+          id: agent.id,
+          name: agent.name,
+          role: agent.role,
+          personality_profile: agent.personality_profile || {},
+          memory_map: agent.memory_map || {}
+        },
+        memory: memory || {
+          weekly_goals: '',
+          preferences: [],
+          recent_learnings: []
+        },
+        recentChats: recentChats || [],
+        sharedMemory: sharedMemory || [],
+        contextSummary: {
+          totalInteractions: recentChats?.length || 0,
+          lastActive: agent.updated_at,
+          memoryEntries: memory ? Object.keys(memory).length : 0,
+          sharedContexts: sharedMemory?.length || 0
+        }
+      }
     });
 
   } catch (error) {
+    console.error('Agent memory API error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: (error as Error).message },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -128,142 +139,163 @@ export async function GET(
 
 /**
  * POST /api/agents/[id]/memory
- * Create new memory entry or share memory with another agent
+ * Update agent memory
  */
 export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Await params for Next.js 13+
-    const { id } = await params;
-    
-    const authHeader = req.headers.get('authorization');
+    const { id: agentId } = await params;
+
+    // Check authentication
+    const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Authentication required' },
         { status: 401 }
       );
     }
 
     const token = authHeader.substring(7);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Invalid authentication token' },
         { status: 401 }
       );
     }
 
-    // Verify agent belongs to user
-    const { data: agent, error: agentError } = await supabase
-      .from('agents')
-      .select('id, user_id, name')
-      .eq('id', id)
+    // Parse request body
+    const body = await request.json();
+    const { type, content, metadata = {} } = body;
+
+    if (!type || !content) {
+      return NextResponse.json(
+        { error: 'Type and content are required' },
+        { status: 400 }
+      );
+    }
+
+    // Verify agent exists and user has access
+    const { data: agent, error: agentError } = await supabaseAdmin
+      .from('portal_agents')
+      .select('*')
+      .eq('id', agentId)
       .eq('user_id', user.id)
       .single();
 
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json(
-        { error: 'Agent not found' },
+        { error: 'Agent not found or access denied' },
         { status: 404 }
       );
     }
 
-    const body = await req.json();
-    const { type } = body;
+    // Update or create memory entry
+    const { data: existingMemory } = await supabaseAdmin
+      .from('portal_agent_memory')
+      .select('*')
+      .eq('agent_id', agentId)
+      .single();
 
-    if (type === 'share_memory') {
-      // Share memory with another agent
-      const { to_agent_id, content, memory_type, context, expires_in_hours }: SharedMemoryRequest = body;
-
-      if (!to_agent_id || !content || !memory_type) {
-        return NextResponse.json(
-          { error: 'Missing required fields for memory sharing' },
-          { status: 400 }
-        );
+    let memoryData;
+    if (existingMemory) {
+      // Update existing memory
+      const updatedMemory = { ...existingMemory };
+      
+      switch (type) {
+        case 'weekly_goals':
+          updatedMemory.weekly_goals = content;
+          break;
+        case 'preference':
+          const preferences = Array.isArray(updatedMemory.preferences) ? updatedMemory.preferences : [];
+          if (!preferences.includes(content)) {
+            preferences.push(content);
+          }
+          updatedMemory.preferences = preferences;
+          break;
+        case 'learning':
+          const learnings = Array.isArray(updatedMemory.recent_learnings) ? updatedMemory.recent_learnings : [];
+          learnings.unshift(content);
+          updatedMemory.recent_learnings = learnings.slice(0, 10); // Keep only last 10
+          break;
+        default:
+          // Store in metadata
+          updatedMemory[type] = content;
       }
 
-      // Verify target agent exists and belongs to same user
-      const { data: targetAgent, error: targetError } = await supabase
-        .from('agents')
-        .select('id, user_id')
-        .eq('id', to_agent_id)
-        .eq('user_id', user.id)
-        .single();
-
-      if (targetError || !targetAgent) {
-        return NextResponse.json(
-          { error: 'Target agent not found' },
-          { status: 404 }
-        );
-      }
-
-      const expiresAt = expires_in_hours 
-        ? new Date(Date.now() + expires_in_hours * 60 * 60 * 1000).toISOString()
-        : null;
-
-      const { data: sharedMemory, error: shareError } = await supabase
-        .from('shared_agent_memory')
-        .insert({
-          from_agent_id: id,
-          to_agent_id,
-          memory_type,
-          content,
-          context,
-          context_expires_at: expiresAt
-        })
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('portal_agent_memory')
+        .update(updatedMemory)
+        .eq('agent_id', agentId)
         .select()
         .single();
 
-      if (shareError) {
-        return NextResponse.json(
-          { error: 'Failed to share memory', details: shareError.message },
-          { status: 500 }
-        );
+      if (updateError) {
+        throw updateError;
       }
-
-      return NextResponse.json({ shared_memory: sharedMemory });
-
+      memoryData = updated;
     } else {
-      // Create regular memory entry
-      const { content, category, context, shareable, importance }: MemoryCreateRequest = body;
+      // Create new memory entry
+      const newMemory: any = {
+        agent_id: agentId,
+        user_id: user.id,
+        type: 'memory'
+      };
 
-      if (!content) {
-        return NextResponse.json(
-          { error: 'Memory content is required' },
-          { status: 400 }
-        );
+      switch (type) {
+        case 'weekly_goals':
+          newMemory.weekly_goals = content;
+          break;
+        case 'preference':
+          newMemory.preferences = [content];
+          break;
+        case 'learning':
+          newMemory.recent_learnings = [content];
+          break;
+        default:
+          newMemory[type] = content;
       }
 
-      const { data: memory, error: memoryError } = await supabase
-        .from('agent_memory')
-        .insert({
-          agent_id: id,
-          user_id: user.id,
-          content,
-          category: category || 'general',
-          context,
-          shareable: shareable || false,
-          importance: importance || 'medium'
-        })
+      const { data: created, error: createError } = await supabaseAdmin
+        .from('portal_agent_memory')
+        .insert(newMemory)
         .select()
         .single();
 
-      if (memoryError) {
-        return NextResponse.json(
-          { error: 'Failed to create memory', details: memoryError.message },
-          { status: 500 }
-        );
+      if (createError) {
+        throw createError;
       }
-
-      return NextResponse.json({ memory });
+      memoryData = created;
     }
 
+    // Log the memory update activity
+    await supabaseAdmin
+      .from('portal_activity_log')
+      .insert({
+        actor_type: 'user',
+        actor_id: user.id,
+        action: 'memory_update',
+        description: `Updated ${type} for ${agent.name}`,
+        meta: { type, content, agentId },
+        user_id: user.id,
+        agent_id: agentId
+      });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        memory: memoryData,
+        message: `Memory updated successfully`
+      }
+    });
+
   } catch (error) {
+    console.error('Agent memory update error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: (error as Error).message },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -290,7 +322,7 @@ export async function DELETE(
     }
 
     const token = authHeader.substring(7);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !user) {
       return NextResponse.json(
@@ -310,8 +342,8 @@ export async function DELETE(
     }
 
     // Verify agent and memory belong to user
-    const { data: memory, error: memoryError } = await supabase
-      .from('agent_memory')
+    const { data: memory, error: memoryError } = await supabaseAdmin
+      .from('portal_agent_memory')
       .select('id, agent_id, user_id')
       .eq('id', memoryId)
       .eq('agent_id', id)
@@ -325,8 +357,8 @@ export async function DELETE(
       );
     }
 
-    const { error: deleteError } = await supabase
-      .from('agent_memory')
+    const { error: deleteError } = await supabaseAdmin
+      .from('portal_agent_memory')
       .delete()
       .eq('id', memoryId);
 

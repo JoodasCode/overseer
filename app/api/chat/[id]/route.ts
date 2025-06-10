@@ -93,7 +93,7 @@ export async function POST(
     // Verify agent exists and user has access via Supabase
     console.log('🔍 Looking for agent:', { agentId, userId: user.id });
     const { data: agent, error: agentError } = await supabaseAdmin
-      .from('Agent')
+      .from('portal_agents')
       .select('*')
       .eq('id', agentId)
       .eq('user_id', user.id)
@@ -111,22 +111,42 @@ export async function POST(
 
     // Get agent memory via Supabase
     const { data: agentMemory } = await supabaseAdmin
-      .from('agent_memory')
+      .from('portal_agent_memory')
       .select('*')
       .eq('agent_id', agentId);
 
     // Get recent chat history via Supabase
     const { data: chatHistory } = await supabaseAdmin
-      .from('chat_messages')
+      .from('portal_agent_logs')
       .select('*')
       .eq('agent_id', agentId)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(10);
 
+    // Get current active mode for the agent
+    const { data: activeMode } = await supabaseAdmin
+      .from('agent_modes')
+      .select('*')
+      .eq('agent_id', agentId)
+      .eq('is_active', true)
+      .single();
+
+    // Get shared memory from other agents
+    const { data: sharedMemory } = await supabaseAdmin
+      .from('shared_agent_memory')
+      .select(`
+        *,
+        from_agent:portal_agents!shared_agent_memory_from_agent_id_fkey(name, role)
+      `)
+      .eq('to_agent_id', agentId)
+      .or('context_expires_at.is.null,context_expires_at.gt.' + new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(5);
+
     // Save user message via Supabase
     await supabaseAdmin
-      .from('chat_messages')
+      .from('portal_agent_logs')
       .insert({
         agent_id: agentId,
         user_id: user.id,
@@ -135,13 +155,13 @@ export async function POST(
         metadata: {}
       });
 
-    // Get agent persona from our Communications Department system
+    // Get agent persona from our agent system
     const { getSystemPromptForAgent } = await import('../../../../lib/agent-personas');
     
     // Build comprehensive personality-driven system prompt
     let systemPrompt = '';
     
-    // Try to get specialized Communications Department persona first
+    // Try to get specialized agent persona first
     const specializedPrompt = getSystemPromptForAgent(agent.name, agent.role);
     
     if (specializedPrompt && !specializedPrompt.includes('You are a helpful, professional AI assistant')) {
@@ -167,7 +187,7 @@ export async function POST(
         systemPrompt += `\n\nYour personality: ${agent.persona}`;
       }
       
-      // Add tone and voice style if available (from Communications Department agents)
+      // Add tone and voice style if available
       if (agent.tone) {
         systemPrompt += `\n\nYour communication tone: ${agent.tone}`;
       }
@@ -181,7 +201,7 @@ export async function POST(
         systemPrompt += `\n\nYour specialized tools and capabilities: ${agent.tools.join(', ')}`;
       }
       
-      // Add preferred tools for Communications Department agents
+      // Add preferred tools
       if (agent.tools_preferred && Array.isArray(agent.tools_preferred) && agent.tools_preferred.length > 0) {
         systemPrompt += `\n\nYour preferred tools: ${agent.tools_preferred.join(', ')}`;
       }
@@ -194,14 +214,37 @@ export async function POST(
 - If asked about something outside your specialization, acknowledge it and redirect to your strengths
 - Remember and reference past conversations when relevant
 - Maintain consistency in your personality across all interactions`;
+    }
+
+    // Add active mode context if available
+    if (activeMode) {
+      systemPrompt += `\n\n--- CURRENT MODE ---`;
+      systemPrompt += `\nActive Mode: ${activeMode.mode_name}`;
       
-      // Add department-specific behavior for Communications agents
-      if (agent.department === 'communications') {
-        systemPrompt += `\n\nAs a Communications Department agent:
-- You work as part of a specialized communications team
-- Collaborate and coordinate with other communications agents when appropriate
-- Reference your specific role and expertise in communications
-- Maintain professional communication standards while expressing your unique personality`;
+      if (activeMode.tone_override) {
+        systemPrompt += `\nTone Override: ${activeMode.tone_override}`;
+      }
+      
+      if (activeMode.response_length) {
+        systemPrompt += `\nResponse Length: ${activeMode.response_length}`;
+      }
+      
+      // Apply mode-specific behavior
+      switch (activeMode.mode_name) {
+        case 'urgent':
+          systemPrompt += `\nMode Behavior: Respond quickly and concisely. Prioritize immediate action items and urgent matters.`;
+          break;
+        case 'detailed':
+          systemPrompt += `\nMode Behavior: Provide comprehensive, thorough responses with detailed explanations and analysis.`;
+          break;
+        case 'creative':
+          systemPrompt += `\nMode Behavior: Emphasize creative thinking, innovative solutions, and inspiring ideas.`;
+          break;
+        case 'executive':
+          systemPrompt += `\nMode Behavior: Use professional, executive-level communication. Focus on high-level strategy and key decisions.`;
+          break;
+        default:
+          systemPrompt += `\nMode Behavior: Operate in standard mode with balanced, professional responses.`;
       }
     }
     
@@ -224,6 +267,18 @@ export async function POST(
       }
     }
     
+    // Add shared memory context from other agents
+    if (sharedMemory && sharedMemory.length > 0) {
+      systemPrompt += `\n\n--- SHARED TEAM CONTEXT ---`;
+      systemPrompt += `\nYour team members have shared the following context with you:`;
+      sharedMemory.forEach((memory: any) => {
+        systemPrompt += `\n- From ${memory.from_agent?.name}: ${memory.content}`;
+        if (memory.context) {
+          systemPrompt += ` (Context: ${memory.context})`;
+        }
+      });
+    }
+
     // Add chat history context summary for better continuity
     if (chatHistory && chatHistory.length > 0) {
       systemPrompt += `\n\n--- CONVERSATION CONTEXT ---`;
@@ -247,13 +302,38 @@ export async function POST(
       ...messages
     ];
 
+    // Adjust OpenAI parameters based on active mode
+    let temperature = 0.7;
+    let maxTokens = 1000;
+    
+    if (activeMode) {
+      switch (activeMode.mode_name) {
+        case 'urgent':
+          temperature = 0.5; // More focused responses
+          maxTokens = 500;   // Shorter responses
+          break;
+        case 'detailed':
+          temperature = 0.6; // Balanced but thorough
+          maxTokens = 1500;  // Longer responses
+          break;
+        case 'creative':
+          temperature = 0.9; // More creative and varied
+          maxTokens = 1200;  // Room for creative expression
+          break;
+        case 'executive':
+          temperature = 0.4; // Very focused and professional
+          maxTokens = 800;   // Concise but complete
+          break;
+      }
+    }
+
     // Create OpenAI streaming response
     const response = await openai.chat.completions.create({
       model: 'gpt-4-turbo',
       messages: openaiMessages,
       stream: true,
-      temperature: 0.7,
-      max_tokens: 1000
+      temperature,
+      max_tokens: maxTokens
     });
 
     // Transform the OpenAI stream to extract text content
@@ -274,7 +354,7 @@ export async function POST(
           // Save the complete agent response to chat history
           try {
             await supabaseAdmin
-              .from('chat_messages')
+              .from('portal_agent_logs')
               .insert({
                 agent_id: agentId,
                 user_id: user.id,
@@ -285,7 +365,7 @@ export async function POST(
 
             // Update agent with last interaction timestamp
             await supabaseAdmin
-              .from('agents')
+              .from('portal_agents')
               .update({ updated_at: new Date().toISOString() })
               .eq('id', agentId);
 

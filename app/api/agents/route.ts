@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     try {
       // Get total count
       const { count, error: countError } = await supabase
-        .from('Agent')
+        .from('portal_agents')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
 
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
 
       // Get agents with pagination and sorting
       const { data: agents, error: agentsError } = await supabase
-        .from('Agent')
+        .from('portal_agents')
         .select('*')
         .eq('user_id', user.id)
         .order(sort, { ascending: order === 'asc' })
@@ -191,48 +191,30 @@ export async function POST(req: NextRequest) {
       // PHASE 1C FIX: Ensure user exists in User table before creating agent
       console.log('🔍 Checking if user exists in database:', user.id);
       
-      // First, check if user exists in User table
-      const { data: existingUser, error: userCheckError } = await supabase
-        .from('User')
-        .select('id')
-        .eq('id', user.id)
-        .single();
+      // User authentication is handled by Supabase Auth
+      console.log('✅ User authenticated via Supabase Auth:', user.email);
 
-      // If user doesn't exist, create them first
-      if (!existingUser || userCheckError) {
-        console.log('👤 Creating user in database:', user.email);
-        const { error: userCreateError } = await supabase
-          .from('User')
-          .insert({
-            id: user.id,
-            email: user.email,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
-
-        if (userCreateError) {
-          console.error('❌ Failed to create user:', userCreateError.message);
-          // If user creation fails, it might be due to duplicate key, which is OK
-          // Continue with agent creation as the user might already exist
-        } else {
-          console.log('✅ User created successfully');
-        }
-      } else {
-        console.log('✅ User already exists in database');
-      }
-
-      // Now create the agent
+      // Create the agent using the new portal_agents table
       console.log('🤖 Creating agent for user:', user.id);
       const { data: agent, error: agentError } = await supabase
-        .from('Agent')
+        .from('portal_agents')
         .insert({
           user_id: user.id,
           name,
-          description,
-          avatar_url,
-          tools: tools || {},
-          preferences: preferences || {},
-          metadata: metadata || {},
+          role: description || 'Assistant',
+          persona: description || 'A helpful AI assistant',
+          avatar: '🤖',
+          tools: tools || [],
+          level: 1,
+          xp: 0,
+          status: 'active',
+          personality_profile: preferences || {},
+          memory_map: {},
+          task_feed: {},
+          level_xp: 0,
+          efficiency_score: 100.00,
+          is_active: true,
+          department_type: metadata?.department || null
         })
         .select()
         .single();
@@ -243,14 +225,16 @@ export async function POST(req: NextRequest) {
       
       console.log('✅ Agent created successfully:', agent.id);
       
-      // Create initial agent memory using correct table name
+      // Create initial agent memory using the new portal_agent_memory table
       const { error: memoryError } = await supabase
-        .from('agent_memory')
+        .from('portal_agent_memory')
         .insert({
           agent_id: agent.id,
+          user_id: user.id,
           weekly_goals: 'Help user achieve their goals',
           preferences: ['Be helpful and friendly'],
-          recent_learnings: ['User just created me']
+          recent_learnings: ['User just created me'],
+          type: 'memory'
         });
 
       if (memoryError) {

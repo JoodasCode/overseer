@@ -1,240 +1,240 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { DashboardOverview } from "@/components/dashboard-overview"
-import { AgentPage } from "@/components/agent-page"
-import { AnalyticsPage } from "@/components/analytics-page"
-import { AutomationsPage } from "@/components/automations-page"
-import { IntegrationHub } from "@/components/integration-hub"
-import { SettingsPage } from "@/components/settings-page"
-import { AgentProfile } from "@/components/agent-profile"
-import { ErrorMonitoringDashboard } from "@/components/error-monitoring-dashboard"
-import { AgentHealthMonitor } from "@/components/agent-health-monitor"
-import { WorkflowBuilder } from "@/components/workflow-builder"
-import { TemplateMarketplace } from "@/components/template-marketplace"
-import { DepartmentOverview } from "@/components/communications-dept/department-overview"
-import { TopBar } from "@/components/top-bar"
-import { HireAgentModal } from "@/components/hire-agent-modal"
-import { ProtectedRoute } from "@/components/auth/protected-route"
-import { useAuth } from "@/lib/auth/supabase-auth-provider"
+import React, { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { 
+  Search, 
+  Plus, 
+  Users, 
+  Settings, 
+  MessageSquare,
+  Activity,
+  TrendingUp,
+  Filter
+} from "lucide-react"
+import { DashboardOverview } from "./dashboard-overview"
+import { AgentProfile } from "./agent-profile"
+import { HireAgentModal } from "./hire-agent-modal"
+import { AgentChatInterface } from "./agent-chat-interface"
 import { useAgents } from "@/lib/hooks/use-api"
-import { useAgentUpdates } from "@/lib/hooks/use-websocket"
+import { useToast } from "@/lib/hooks/use-toast"
 import type { Agent } from "@/lib/types"
-import { Loader2, AlertCircle } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AgentGridSkeleton } from "@/components/agent-card-skeleton"
 
-// Production mode - using real data from Supabase only
+type CurrentPage = 
+  | "dashboard" 
+  | "agents" 
+  | "agent-profile" 
+  | "agent-chat"
 
-export default function AgentsDashboard() {
-  const { user, loading: authLoading } = useAuth()
-  const [showHireAgent, setShowHireAgent] = useState(false)
-  const [justHiredAgent, setJustHiredAgent] = useState(false) // Prevent empty state flash
-  const [hasMounted, setHasMounted] = useState(false)
-  const [currentPage, setCurrentPage] = useState<
-    | "dashboard"
-    | "agents"
-    | "analytics"
-    | "automations"
-    | "settings"
-    | "agent-profile"
-    | "integrations"
-    | "monitoring"
-    | "health"
-    | "workflows"
-    | "templates"
-    | "communications-dept"
-  >("dashboard")
+interface AgentsDashboardProps {
+  onNavigate?: (page: string) => void
+}
+
+export function AgentsDashboard({ onNavigate }: AgentsDashboardProps) {
+  const [currentPage, setCurrentPage] = useState<CurrentPage>("dashboard")
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-
-  // Only use API hooks when user is authenticated
-  const { agents, loading, error, refetch: refetchAgents } = useAgents()
+  const [showHireModal, setShowHireModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filterStatus, setFilterStatus] = useState<string>("all")
   
-  // Subscribe to real-time agent updates
-  // useAgentUpdates() // Temporarily disabled to debug
-
-  useEffect(() => {
-    setHasMounted(true)
-  }, [])
+  const { agents, loading, error, refetch } = useAgents()
+  const { toast } = useToast()
 
   const handleViewAgentProfile = (agent: Agent) => {
     setSelectedAgent(agent)
     setCurrentPage("agent-profile")
   }
 
-  const handleHireAgent = () => {
-    setShowHireAgent(true)
+  const handleChatWithAgent = (agent: Agent) => {
+    setSelectedAgent(agent)
+    setCurrentPage("agent-chat")
   }
 
-  const handleShowCommunicationsDept = () => {
-    setCurrentPage("communications-dept")
-  }
-
-  // Create a callback for agent hiring that refreshes the data
-  const handleAgentHired = async () => {
-    setShowHireAgent(false)
-    setJustHiredAgent(true) // Prevent empty state flash
-    // Add a small delay to ensure database has been updated
-    setTimeout(async () => {
-      await refetchAgents()
-      // Reset the flag after a longer delay to allow data to settle
-      setTimeout(() => {
-        setJustHiredAgent(false)
-      }, 1000)
-    }, 500)
-  }
-
-  const renderCurrentPage = () => {
-    // Debug logging
-    console.log('🎯 Dashboard state:', {
-      loading,
-      error,
-      agentsCount: agents?.length || 0,
-      agents: agents,
-      justHiredAgent,
-      currentPage
+  const handleAgentHired = () => {
+    setShowHireModal(false)
+    refetch()
+    toast({
+      variant: "success",
+      title: "🎉 Agent Hired Successfully!",
+      description: "Your new agent is ready to help you achieve your goals.",
     })
-
-    if (loading) {
-      // Show skeleton loading states based on current page
-      switch (currentPage) {
-        case "dashboard":
-        case "agents":
-          return (
-            <div className="p-6 space-y-6">
-              <div className="space-y-2">
-                <div className="h-8 w-48 bg-muted animate-pulse rounded" />
-                <div className="h-4 w-96 bg-muted animate-pulse rounded" />
-              </div>
-              <AgentGridSkeleton count={6} />
-            </div>
-          )
-        default:
-          return (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center space-y-4">
-                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-                <p className="font-pixel text-sm text-muted-foreground">Loading...</p>
-              </div>
-            </div>
-          )
-      }
-    }
-
-    if (error) {
-      return (
-        <div className="p-6">
-          <Alert className="border-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="font-pixel text-sm">
-              Failed to load agents: {error}. Please check your connection and try again.
-            </AlertDescription>
-          </Alert>
-          <div className="mt-4 text-center">
-            <button
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-pixel text-sm"
-            >
-              🔄 Retry
-            </button>
-          </div>
-        </div>
-      )
-    }
-
-    // Use real agents data - no fallbacks in production mode
-    const agentsData = agents || []
-
-    // Show loading state if we just hired an agent and data is still loading
-    if (justHiredAgent && agentsData.length === 0) {
-      return (
-        <div className="flex items-center justify-center h-full p-6">
-          <div className="text-center space-y-4">
-            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-            <p className="font-pixel text-sm text-muted-foreground">Setting up your new agent...</p>
-          </div>
-        </div>
-      )
-    }
-
-    // Show empty state if no agents exist (but not if we just hired an agent)
-    if (!loading && !justHiredAgent && agentsData.length === 0 && (currentPage === "dashboard" || currentPage === "agents")) {
-      return (
-        <div className="flex items-center justify-center h-full p-6">
-          <div className="text-center space-y-6 max-w-md">
-            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <span className="text-4xl">🤖</span>
-            </div>
-            <div className="space-y-2">
-              <h3 className="font-pixel text-xl font-semibold">No Agents Yet</h3>
-              <p className="text-muted-foreground font-pixel text-sm">
-                Get started by hiring your first AI agent to help automate your workflows.
-              </p>
-            </div>
-            <button
-              onClick={handleHireAgent}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-pixel text-sm"
-            >
-              <span>🚀</span>
-              Hire Your First Agent
-            </button>
-          </div>
-        </div>
-      )
-    }
-
-    switch (currentPage) {
-      case "dashboard":
-        return <DashboardOverview agents={agentsData} onSelectAgent={handleViewAgentProfile} onAgentHired={handleAgentHired} onShowCommunicationsDept={handleShowCommunicationsDept} />
-      case "communications-dept":
-        return <DepartmentOverview onViewAgent={handleViewAgentProfile} />
-      case "agents":
-        return <AgentPage agents={agentsData} selectedAgent={selectedAgent || agentsData[0]} onSelectAgent={setSelectedAgent} onAgentHired={handleAgentHired} />
-      case "analytics":
-        return <AnalyticsPage agents={agentsData} />
-      case "automations":
-        return <AutomationsPage agents={agentsData} />
-      case "integrations":
-        return <IntegrationHub />
-      case "settings":
-        return <SettingsPage />
-      case "agent-profile":
-        return selectedAgent ? <AgentProfile agent={selectedAgent} onBack={() => setCurrentPage("agents")} /> : null
-      case "monitoring":
-        return <ErrorMonitoringDashboard />
-      case "health":
-        return <AgentHealthMonitor agents={agentsData} />
-      case "workflows":
-        return <WorkflowBuilder agents={agentsData} />
-      case "templates":
-        return <TemplateMarketplace />
-      default:
-        return <DashboardOverview agents={agentsData} onSelectAgent={handleViewAgentProfile} />
-    }
   }
 
-  return (
-    <ProtectedRoute>
-      <SidebarProvider>
-        <div className="flex h-screen w-full">
-          <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} onHireAgent={handleHireAgent} />
-          <SidebarInset className="flex-1 flex flex-col">
-            <TopBar />
-            <main className="flex-1 overflow-auto">
-              {renderCurrentPage()}
-            </main>
-          </SidebarInset>
-        </div>
-        {hasMounted && (
-          <HireAgentModal 
-            isOpen={showHireAgent} 
-            onClose={() => setShowHireAgent(false)}
+  const handleBackToDashboard = () => {
+    setCurrentPage("dashboard")
+    setSelectedAgent(null)
+  }
+
+  const handleBackToAgents = () => {
+    setCurrentPage("agents")
+    setSelectedAgent(null)
+  }
+
+  // Filter agents based on search and status
+  const filteredAgents = agents?.filter(agent => {
+    const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         agent.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = filterStatus === "all" || agent.status === filterStatus
+    return matchesSearch && matchesStatus
+  }) || []
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-destructive mb-4">Error loading agents: {error}</p>
+        <Button onClick={refetch}>Try Again</Button>
+      </div>
+    )
+  }
+
+  // Render different pages
+  switch (currentPage) {
+    case "dashboard":
+      return <DashboardOverview agents={agents || []} onSelectAgent={handleViewAgentProfile} onAgentHired={() => setShowHireModal(true)} />
+    
+    case "agent-profile":
+      return selectedAgent ? (
+        <AgentProfile 
+          agent={selectedAgent} 
+          onBack={handleBackToDashboard}
+        />
+      ) : null
+
+    case "agent-chat":
+      return selectedAgent ? (
+        <AgentChatInterface 
+          agent={selectedAgent}
+          isOpen={true}
+          onClose={handleBackToDashboard}
+        />
+      ) : null
+
+    case "agents":
+    default:
+      return (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">AI Agents</h1>
+              <p className="text-muted-foreground">Manage your AI team</p>
+            </div>
+            <Button onClick={() => setShowHireModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Hire Agent
+            </Button>
+          </div>
+
+          {/* Search and Filters */}
+          <div className="flex items-center space-x-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Search agents..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2 border rounded-md"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="idle">Idle</option>
+              <option value="offline">Offline</option>
+            </select>
+          </div>
+
+          {/* Agents Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredAgents.map((agent) => (
+              <Card key={agent.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className="text-3xl">{agent.avatar_url || '🤖'}</div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg">{agent.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {agent.preferences?.role || agent.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-4">
+                    <Badge variant={agent.status === 'active' ? 'default' : 'secondary'}>
+                      {agent.status || 'idle'}
+                    </Badge>
+                    <div className="text-sm text-muted-foreground">
+                      {agent.stats?.total_tasks_completed || 0} tasks completed
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleChatWithAgent(agent)}
+                      className="flex-1"
+                    >
+                      <MessageSquare className="w-4 h-4 mr-1" />
+                      Chat
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewAgentProfile(agent)}
+                    >
+                      <Settings className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {filteredAgents.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">
+                {searchQuery || filterStatus !== "all" ? "No agents found" : "No agents yet"}
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                {searchQuery || filterStatus !== "all" 
+                  ? "Try adjusting your search or filters"
+                  : "Get started by hiring your first AI agent"
+                }
+              </p>
+              {!searchQuery && filterStatus === "all" && (
+                <Button onClick={() => setShowHireModal(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Hire Your First Agent
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Hire Agent Modal */}
+          <HireAgentModal
+            isOpen={showHireModal}
+            onClose={() => setShowHireModal(false)}
             onAgentHired={handleAgentHired}
           />
-        )}
-      </SidebarProvider>
-    </ProtectedRoute>
-  )
+        </div>
+      )
+  }
 }

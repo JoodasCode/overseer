@@ -47,22 +47,22 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
   const createWelcomeMessage = (): string => {
     const agentName = agent.name || 'Assistant';
     
-    // Check for Communications Department agents with specific personalities
+    // Check for specific agent personalities
     switch (agentName.toLowerCase()) {
       case 'alex':
-        return `👋 Hello! I'm Alex, your Lead Communications Strategist. I'm here to help you develop strategic communication plans, coordinate campaigns, and think through long-term messaging goals. What communication challenge can we tackle together today?`;
+        return `👋 Hello! I'm Alex, your Strategic Coordinator. I'm here to help you develop strategic plans, coordinate projects, and think through long-term goals systematically. What challenge can we tackle together today?`;
       
       case 'dana':
-        return `🎨 Hey there! I'm Dana, your Visual Communications Assistant! ✨ I'm super excited to help you create stunning visuals, eye-catching designs, and amazing visual content! Whether you need infographics, slide decks, or creative visual storytelling - I'm your creative powerhouse! 🚀 What visual magic shall we create today?`;
+        return `🎨 Hey there! I'm Dana, your Creative Assistant! ✨ I'm super excited to help you bring ideas to life through visual creativity and innovative thinking! Whether you need design work, creative brainstorming, or visual content - I'm your creative powerhouse! 🚀 What creative magic shall we create today?`;
       
       case 'jamie':
-        return `🤝 Hi! I'm Jamie, your Internal Communications Liaison. I'm passionate about fostering great communication within teams and organizations. Whether you need help with internal announcements, team coordination, or building positive workplace relationships - I'm here to help create clarity and connection. How can I support your internal communications today?`;
+        return `🤝 Hi! I'm Jamie, your Team Coordinator. I'm passionate about fostering great collaboration and team harmony. Whether you need help with team coordination, conflict resolution, or building positive relationships - I'm here to help create clarity and connection. How can I support your team today?`;
       
       case 'riley':
-        return `📊 Hello. I'm Riley, your Data-Driven PR Analyst. I approach communications through the lens of data, metrics, and measurable outcomes. I can help you analyze communication performance, track KPIs, understand engagement patterns, and provide evidence-based insights for your strategy. What data or analysis do you need today?`;
+        return `📊 Hello. I'm Riley, your Data Analyst. I approach challenges through the lens of data, metrics, and measurable outcomes. I can help you analyze performance, track KPIs, understand patterns, and provide evidence-based insights for your decisions. What data or analysis do you need today?`;
       
       case 'toby':
-        return `⚡ Hi there! I'm Toby, your Reactive Support Coordinator. I'm always ready to help with urgent communications, crisis response, or any situation that needs immediate attention. I monitor for issues, maintain response protocols, and ensure we're prepared for any communication challenge. What can I help you coordinate or respond to today?`;
+        return `⚡ Hi there! I'm Toby, your Support Coordinator. I'm always ready to help with urgent issues, rapid response, or any situation that needs immediate attention. I monitor for problems, maintain response protocols, and ensure we're prepared for any challenge. What can I help you coordinate or resolve today?`;
       
       default:
         // For custom agents, create a more personalized welcome
@@ -133,11 +133,11 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
 
         if (response.ok) {
           const data = await response.json()
-          setAvailableModes(data.modes || [])
-          if (data.active_mode) {
+          setAvailableModes(data.data?.modes || [])
+          if (data.data?.active_mode) {
             setPersonalityIndicators(prev => ({
               ...prev,
-              activeMode: data.active_mode.mode_name
+              activeMode: data.data.active_mode.mode_name
             }))
           }
         }
@@ -146,7 +146,33 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
       }
     }
 
+    const loadAgentMemory = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+
+        const response = await fetch(`/api/agents/${agent.id}/memory`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.data?.memory) {
+            setPersonalityIndicators(prev => ({
+              ...prev,
+              recentMemory: data.data.memory.recent_learnings?.slice(0, 3) || []
+            }))
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load agent memory:', error)
+      }
+    }
+
     loadAgentModes()
+    loadAgentMemory()
   }, [agent.id])
 
   const switchAgentMode = async (modeName: string) => {
@@ -377,6 +403,69 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
         </CardHeader>
 
         <CardContent className="flex-1 p-0 flex flex-col">
+          {/* Personality Indicators Panel */}
+          {showPersonalityPanel && (
+            <div className="border-b border-pixel p-3 bg-muted/50">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-pixel text-xs">Agent Context</h4>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowPersonalityPanel(false)}
+                  className="h-6 w-6 p-0"
+                >
+                  ✕
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-muted-foreground">Mode:</span>
+                  <div className="flex items-center space-x-1 mt-1">
+                    <Badge variant="outline" className="font-pixel text-xs">
+                      {personalityIndicators.activeMode}
+                    </Badge>
+                    {availableModes.length > 1 && (
+                      <select 
+                        value={personalityIndicators.activeMode}
+                        onChange={(e) => switchAgentMode(e.target.value)}
+                        className="text-xs border rounded px-1 py-0.5"
+                      >
+                        {availableModes.map(mode => (
+                          <option key={mode.id} value={mode.mode_name}>
+                            {mode.mode_name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Status:</span>
+                  <div className="flex items-center space-x-1 mt-1">
+                    {personalityIndicators.collaborating && (
+                      <Badge variant="secondary" className="font-pixel text-xs">
+                        <Users className="w-3 h-3 mr-1" />
+                        Collaborating
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {personalityIndicators.recentMemory.length > 0 && (
+                <div className="mt-2">
+                  <span className="text-muted-foreground text-xs">Recent Context:</span>
+                  <div className="mt-1 space-y-1">
+                    {personalityIndicators.recentMemory.map((memory, idx) => (
+                      <div key={idx} className="text-xs bg-background rounded px-2 py-1">
+                        {memory}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
             <div className="space-y-4">
               {messages.map((message) => (
