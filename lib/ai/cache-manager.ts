@@ -18,6 +18,64 @@ export interface CachedResponse {
   timestamp: number;
 }
 
+/**
+ * Cache Manager for agent-specific responses
+ */
+export class CacheManager {
+  private readonly defaultTTL = 60 * 60 * 24; // 1 day in seconds
+  private readonly namespace = 'agent:cache:';
+  
+  /**
+   * Cache a response for an agent
+   */
+  public async cacheResponse(
+    agentId: string,
+    message: string,
+    completion: string,
+    ttl: number = this.defaultTTL
+  ): Promise<boolean> {
+    try {
+      const cacheKey = this.generateAgentCacheKey(agentId, message);
+      
+      const cacheData = {
+        content: completion,
+        timestamp: Date.now(),
+        agentId,
+        message,
+      };
+      
+      await getRedisClient().set(cacheKey, cacheData, { ex: ttl });
+      return true;
+    } catch (error) {
+      console.error('Error caching agent response:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Get a cached response for an agent
+   */
+  public async getCachedResponse(agentId: string, message: string): Promise<any | null> {
+    try {
+      const cacheKey = this.generateAgentCacheKey(agentId, message);
+      const cachedData = await getRedisClient().get(cacheKey);
+      
+      return cachedData;
+    } catch (error) {
+      console.error('Error retrieving agent cache:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Generate a cache key for agent responses
+   */
+  private generateAgentCacheKey(agentId: string, message: string): string {
+    const keyData = JSON.stringify({ agentId, message });
+    return this.namespace + createHash('sha256').update(keyData).digest('hex');
+  }
+}
+
 export class LLMCacheManager {
   private readonly defaultTTL = 60 * 60 * 24 * 7; // 7 days in seconds
   private readonly namespace = 'llm:cache:';
@@ -100,7 +158,7 @@ export class LLMCacheManager {
   public async invalidateCache(messages: Message[], modelConfig: any = {}): Promise<boolean> {
     try {
       const cacheKey = this.generateCacheKey(messages, modelConfig);
-      await redis.del(cacheKey);
+      await getRedisClient().del(cacheKey);
       return true;
     } catch (error) {
       console.error('Error invalidating cache:', error);
@@ -114,13 +172,13 @@ export class LLMCacheManager {
   public async invalidateModelCache(model: string): Promise<boolean> {
     try {
       // Get all keys with the namespace
-      const keys = await redis.keys(`${this.namespace}*`);
+      const keys = await getRedisClient().keys(`${this.namespace}*`);
       
       // For each key, get the data and check if it matches the model
       for (const key of keys) {
-        const data = await redis.get<CachedResponse>(key);
+        const data = await getRedisClient().get<CachedResponse>(key);
         if (data && data.model === model) {
-          await redis.del(key);
+          await getRedisClient().del(key);
         }
       }
       
@@ -141,14 +199,14 @@ export class LLMCacheManager {
   }> {
     try {
       // Get all keys with the namespace
-      const keys = await redis.keys(`${this.namespace}*`);
+      const keys = await getRedisClient().keys(`${this.namespace}*`);
       
       const modelCounts: Record<string, number> = {};
       let totalSize = 0;
       
       // For each key, get the data and count by model
       for (const key of keys) {
-        const data = await redis.get<CachedResponse>(key);
+        const data = await getRedisClient().get<CachedResponse>(key);
         if (data) {
           const model = data.model || 'unknown';
           modelCounts[model] = (modelCounts[model] || 0) + 1;

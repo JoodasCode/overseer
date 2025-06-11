@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/supabase-auth-provider'
-import { AuthModal } from '@/components/auth/auth-modal'
+import { ModernAuthModal } from '@/components/auth/modern-auth-modal'
 import { Button } from '@/components/ui/button'
 import { Loader2, LogIn } from 'lucide-react'
 
@@ -55,6 +55,14 @@ export default function Home() {
                 <LogIn className="mr-2 h-5 w-5" />
                 Get Started
               </Button>
+              <Button 
+                size="lg" 
+                variant="outline"
+                onClick={() => router.push('/auth/signin')}
+                className="text-lg px-8 py-6"
+              >
+                Sign In
+              </Button>
             </div>
           </div>
         </div>
@@ -93,10 +101,11 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Auth Modal */}
-      <AuthModal 
+      {/* Modern Auth Modal */}
+      <ModernAuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 
+        defaultTab="signup"
       />
     </div>
   )

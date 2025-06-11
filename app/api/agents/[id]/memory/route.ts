@@ -302,6 +302,12 @@ export async function POST(
 }
 
 /**
+ * PATCH /api/agents/[id]/memory
+ * Update agent memory (alias for POST)
+ */
+export const PATCH = POST;
+
+/**
  * DELETE /api/agents/[id]/memory/[memory_id]
  * Delete specific memory entry
  */
