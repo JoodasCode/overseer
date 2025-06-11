@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { subscribe, unsubscribe } from '@/lib/realtime/event-emitter';
-
-export const runtime = 'edge';
 
 export async function GET(req: NextRequest) {
   const encoder = new TextEncoder();

@@ -8,8 +8,6 @@ import { prisma } from '@/lib/db/prisma';
 import { ErrorHandler } from '@/lib/error-handler';
 import { safeJsonParse } from '@/lib/utils/safe-json';
 
-export const runtime = 'edge';
-
 /**
  * POST /api/llm/stream
  * 

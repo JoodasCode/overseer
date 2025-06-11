@@ -13,9 +13,9 @@ export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false)
 
   useEffect(() => {
-    // Redirect authenticated users to portal
+    // Redirect authenticated users to the new Shadcn portal dashboard
     if (user && !loading) {
-      router.push('/portal/dashboard')
+      router.push('/dashboard')
     }
   }, [user, loading, router])
 
@@ -31,46 +31,73 @@ export default function Home() {
     )
   }
 
-  // Show landing page for unauthenticated users
-  if (!user) {
-    return (
-      <>
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="text-center space-y-6 max-w-md">
-            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <span className="text-4xl">🤖</span>
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold">AGENTS OS</h1>
-              <p className="text-muted-foreground">
-                Build your AI team and run your company like a game
-              </p>
-            </div>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Please sign in to access the portal
-              </p>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
+      {/* Hero Section */}
+      <div className="container mx-auto px-4 py-16">
+        <div className="text-center space-y-8 max-w-4xl mx-auto">
+          <div className="space-y-4">
+            <h1 className="text-4xl md:text-6xl font-bold text-foreground">
+              Build Your <span className="text-primary">AI Team</span>
+            </h1>
+            <p className="text-xl md:text-2xl text-muted-foreground">
+              Run your company like a game with AI agents that work together
+            </p>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
+                size="lg" 
                 onClick={() => setShowAuthModal(true)}
-                className="w-full max-w-xs mx-auto"
-                size="lg"
+                className="text-lg px-8 py-6"
               >
-                <LogIn className="w-4 h-4 mr-2" />
-                Sign In
+                <LogIn className="mr-2 h-5 w-5" />
+                Get Started
               </Button>
             </div>
           </div>
         </div>
-        
-        <AuthModal 
-          isOpen={showAuthModal} 
-          onClose={() => setShowAuthModal(false)}
-          defaultTab="signin"
-        />
-      </>
-    )
-  }
 
-  // This shouldn't be reached due to the redirect above, but just in case
-  return null
+        {/* Features Grid */}
+        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="text-center space-y-4 p-6 rounded-lg bg-card border">
+            <div className="w-12 h-12 mx-auto bg-primary/10 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">🤖</span>
+            </div>
+            <h3 className="text-xl font-semibold">AI Agent Collaboration</h3>
+            <p className="text-muted-foreground">
+              Create AI agents that work together on complex tasks and learn from each interaction
+            </p>
+          </div>
+
+          <div className="text-center space-y-4 p-6 rounded-lg bg-card border">
+            <div className="w-12 h-12 mx-auto bg-primary/10 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">🧠</span>
+            </div>
+            <h3 className="text-xl font-semibold">Persistent Memory</h3>
+            <p className="text-muted-foreground">
+              Agents remember your preferences, past conversations, and improve over time
+            </p>
+          </div>
+
+          <div className="text-center space-y-4 p-6 rounded-lg bg-card border">
+            <div className="w-12 h-12 mx-auto bg-primary/10 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">⚡</span>
+            </div>
+            <h3 className="text-xl font-semibold">Workflow Automation</h3>
+            <p className="text-muted-foreground">
+              Build automated workflows that connect your tools and streamline operations
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+      />
+    </div>
+  )
 }

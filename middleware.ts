@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 // Simple middleware that allows all requests in development
 export function middleware(request: NextRequest) {
+  // No redirections - we want clean consistent routes only
   return NextResponse.next();
 }
 
