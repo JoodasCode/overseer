@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { EmojiSelector } from "./emoji-selector"
-import { Star, Users, ChevronLeft, ChevronRight } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Star, Users } from "lucide-react"
 import { useAuth } from "@/lib/auth/supabase-auth-provider"
 import { useToast } from "@/lib/hooks/use-toast"
 
@@ -21,8 +21,8 @@ const availableAgents = [
   {
     id: "alex-comms",
     name: "Alex",
-    role: "Lead Communications Strategist",
-    defaultAvatar: "🧑‍💼",
+    role: "Strategic Coordinator",
+    template: "alex",
     persona: "Calm, articulate, and tactically creative. Thinks long-term. Speaks with clarity and structure.",
     tools: ["Notion", "Gmail", "Google Calendar", "Slack"],
     specialty: "Campaign planning & strategic coordination",
@@ -33,8 +33,8 @@ const availableAgents = [
   {
     id: "dana-comms",
     name: "Dana",
-    role: "Visual Communications Assistant",
-    defaultAvatar: "👽",
+    role: "Visual Assistant",
+    template: "dana",
     persona: "Quirky, visual, expressive. Uses emojis and fast, enthusiastic language.",
     tools: ["Canva", "Figma", "Slack"],
     specialty: "Visual content creation & design",
@@ -45,8 +45,8 @@ const availableAgents = [
   {
     id: "jamie-comms",
     name: "Jamie",
-    role: "Internal Communications Liaison",
-    defaultAvatar: "🛸",
+    role: "Internal Liaison",
+    template: "jamie",
     persona: "Friendly, empathetic, diplomatic. Prioritizes team morale and clarity.",
     tools: ["Slack", "Gmail", "Notion"],
     specialty: "Internal communications & team morale",
@@ -57,8 +57,8 @@ const availableAgents = [
   {
     id: "riley-comms",
     name: "Riley",
-    role: "Data-Driven PR Analyst",
-    defaultAvatar: "🤖",
+    role: "Data Analyst",
+    template: "riley",
     persona: "Analytical, precise, neutral tone. Speaks with graphs and impact metrics.",
     tools: ["Google Sheets", "Analytics"],
     specialty: "PR analytics & performance tracking",
@@ -69,8 +69,8 @@ const availableAgents = [
   {
     id: "toby-comms",
     name: "Toby",
-    role: "Reactive Support Coordinator",
-    defaultAvatar: "👨‍🚀",
+    role: "Support Coordinator",
+    template: "toby",
     persona: "Quick-thinking, slightly anxious but extremely thorough. Speaks fast but factually.",
     tools: ["Slack", "Gmail", "Discord"],
     specialty: "Crisis management & rapid response",
@@ -83,58 +83,18 @@ const availableAgents = [
 export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModalProps) {
   const { session } = useAuth()
   const { toast } = useToast()
-  const [step, setStep] = useState<"select" | "customize">("select")
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
-  const [selectedEmoji, setSelectedEmoji] = useState<string>("")
   const [isHiring, setIsHiring] = useState(false)
 
   const currentAgent = availableAgents.find((a) => a.id === selectedAgent)
 
   const handleSelectAgent = (agentId: string) => {
     setSelectedAgent(agentId)
-    const agent = availableAgents.find((a) => a.id === agentId)
-    if (agent) {
-      setSelectedEmoji(agent.defaultAvatar)
-    }
-  }
-
-  const handleNext = () => {
-    if (selectedAgent) {
-      setStep("customize")
-    }
-  }
-
-  const handleBack = () => {
-    setStep("select")
   }
 
   const handleHire = async () => {
-    if (selectedAgent && selectedEmoji && currentAgent && session?.access_token) {
+    if (selectedAgent && currentAgent && session?.access_token) {
       setIsHiring(true);
-      
-      // Create optimistic agent data for immediate UI update
-      const optimisticAgent = {
-        id: `temp-${Date.now()}`, // Temporary ID
-        name: currentAgent.name,
-        role: currentAgent.role,
-        avatar: selectedEmoji,
-        persona: currentAgent.persona,
-        tools: currentAgent.tools,
-        level: currentAgent.level,
-        status: "active" as const,
-        lastActive: "just now",
-        joinedDate: new Date().toISOString().split('T')[0],
-        totalTasksCompleted: 0,
-        favoriteTools: currentAgent.tools.slice(0, 2),
-        tasks: [],
-        memory: {
-          weeklyGoals: "Getting started",
-          recentLearnings: [],
-          preferences: [currentAgent.persona],
-          skillsUnlocked: [],
-          memoryLogs: [],
-        },
-      };
 
       try {
         // Create the agent via API
@@ -147,16 +107,17 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
           body: JSON.stringify({
             name: currentAgent.name,
             description: currentAgent.description,
-            avatar_url: selectedEmoji,
-            tools: currentAgent.tools.reduce((acc, tool) => ({ ...acc, [tool.toLowerCase()]: true }), {}),
+            avatar_url: `https://api.dicebear.com/9.x/croodles/svg?seed=${currentAgent.name.toLowerCase()}&size=100`,
+            role: currentAgent.role,
+            personality: currentAgent.persona,
+            tools: currentAgent.tools,
             preferences: {
               persona: currentAgent.persona,
               specialty: currentAgent.specialty,
               level: currentAgent.level
             },
             metadata: {
-              role: currentAgent.role,
-              defaultAvatar: currentAgent.defaultAvatar,
+              template: currentAgent.template,
               hired_at: new Date().toISOString()
             }
           })
@@ -174,23 +135,13 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
           });
           
           // Reset state
-          setStep("select")
           setSelectedAgent(null)
-          setSelectedEmoji("")
           
           // Call the callback to refetch agents and close modal
           if (onAgentHired) {
-            // Add a small delay to ensure the database transaction is complete
-            setTimeout(() => {
-              onAgentHired()
-            }, 300)
-          } else {
-            onClose()
-            // Fallback to page refresh if no callback provided
-            setTimeout(() => {
-              window.location.reload()
-            }, 300)
+            onAgentHired()
           }
+          onClose()
         } else {
           const error = await response.json();
           console.error("❌ Failed to hire agent:", error);
@@ -209,7 +160,7 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
         toast({
           variant: "destructive",
           title: "❌ Network Error",
-          description: "Failed to hire agent. Please check your connection and try again.",
+          description: 'Failed to connect to the server. Please try again.',
         });
       } finally {
         setIsHiring(false);
@@ -218,115 +169,93 @@ export function HireAgentModal({ isOpen, onClose, onAgentHired }: HireAgentModal
   }
 
   const handleClose = () => {
-    setStep("select")
     setSelectedAgent(null)
-    setSelectedEmoji("")
     onClose()
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] border-pixel overflow-hidden flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="font-pixel text-center text-lg">
-            {step === "select" ? "CHOOSE YOUR AGENT" : "CUSTOMIZE YOUR AGENT"}
-          </DialogTitle>
-          <p className="text-center text-sm text-muted-foreground">
-            {step === "select" ? "Select a new team member to join your crew" : "Personalize your agent's appearance"}
-          </p>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold">Hire Your Agent</DialogTitle>
+          <p className="text-muted-foreground">Select a new team member to join your crew</p>
         </DialogHeader>
 
-        {step === "select" && (
-          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
-            {availableAgents.map((agent) => (
-              <Card
-                key={agent.id}
-                className={`border-pixel cursor-pointer transition-all ${
-                  selectedAgent === agent.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"
-                }`}
-                onClick={() => handleSelectAgent(agent.id)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start space-x-4">
-                    <div className="text-3xl">{agent.defaultAvatar}</div>
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-pixel text-sm">{agent.name}</h3>
-                          <p className="text-xs text-muted-foreground">{agent.role}</p>
-                        </div>
-                        <Badge variant="outline" className="font-pixel text-xs">
-                          Level {agent.level}
+        <div className="space-y-4 mt-4">
+          {availableAgents.map((agent) => (
+            <Card
+              key={agent.id}
+              className={`cursor-pointer transition-all hover:shadow-md ${
+                selectedAgent === agent.id ? "ring-2 ring-primary border-primary bg-primary/5" : "border-border"
+              }`}
+              onClick={() => handleSelectAgent(agent.id)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start space-x-4">
+                  <Avatar className="w-12 h-12 border-2 border-background">
+                    <AvatarImage 
+                      src={`https://api.dicebear.com/9.x/croodles/svg?seed=${agent.name.toLowerCase()}&size=100`} 
+                      alt={agent.name} 
+                    />
+                    <AvatarFallback>{agent.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold text-lg">{agent.name}</h3>
+                        <p className="text-sm text-muted-foreground">{agent.role}</p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        Level {agent.level}
+                      </Badge>
+                    </div>
+                    
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {agent.description}
+                    </p>
+                    
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Star className="h-3 w-3" />
+                      <span>{agent.specialty}</span>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1">
+                      {agent.tools.map((tool) => (
+                        <Badge key={tool} variant="outline" className="text-xs">
+                          {tool}
                         </Badge>
-                      </div>
-                      <p className="text-sm">{agent.description}</p>
-                      <div className="flex items-center space-x-2">
-                        <Star className="w-3 h-3 text-primary" />
-                        <span className="text-xs font-pixel">{agent.specialty}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {agent.tools.slice(0, 3).map((tool, index) => (
-                          <Badge key={index} variant="secondary" className="font-pixel text-xs">
-                            {tool}
-                          </Badge>
-                        ))}
-                        {agent.tools.length > 3 && (
-                          <Badge variant="secondary" className="font-pixel text-xs">
-                            +{agent.tools.length - 3}
-                          </Badge>
-                        )}
-                      </div>
+                      ))}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-
-            <div className="flex space-x-2 flex-shrink-0 pt-4 border-t mt-4">
-              <Button variant="outline" onClick={handleClose} className="flex-1 font-pixel text-xs">
-                Cancel
-              </Button>
-              <Button onClick={handleNext} disabled={!selectedAgent} className="flex-1 font-pixel text-xs">
-                <ChevronRight className="w-3 h-3 mr-1" />
-                Customize
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {step === "customize" && currentAgent && (
-          <div className="space-y-6 overflow-y-auto flex-1">
-            <div className="text-center">
-              <h3 className="font-pixel text-lg">{currentAgent.name}</h3>
-              <p className="text-sm text-muted-foreground">{currentAgent.role}</p>
-            </div>
-
-            <EmojiSelector selectedEmoji={selectedEmoji} onEmojiSelect={setSelectedEmoji} />
-
-            <div className="bg-muted/30 p-4 rounded border-pixel">
-              <h4 className="font-pixel text-xs text-primary mb-2">AGENT PREVIEW</h4>
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">{selectedEmoji}</span>
-                <div>
-                  <div className="font-pixel text-sm">{currentAgent.name}</div>
-                  <div className="text-xs text-muted-foreground">{currentAgent.role}</div>
-                  <div className="text-xs mt-1">{currentAgent.specialty}</div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-            <div className="flex space-x-2 flex-shrink-0 pt-4 border-t mt-4">
-              <Button variant="outline" onClick={handleBack} className="flex-1 font-pixel text-xs">
-                <ChevronLeft className="w-3 h-3 mr-1" />
-                Back
-              </Button>
-              <Button onClick={handleHire} disabled={!selectedEmoji || isHiring} className="flex-1 font-pixel text-xs">
-                <Users className="w-3 h-3 mr-1" />
-                {isHiring ? "Hiring..." : "Hire Agent"}
-              </Button>
-            </div>
-          </div>
-        )}
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+          <Button variant="outline" onClick={handleClose} disabled={isHiring}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleHire} 
+            disabled={!selectedAgent || isHiring}
+            className="min-w-[120px]"
+          >
+            {isHiring ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Hiring...
+              </div>
+            ) : (
+              <>
+                <Users className="h-4 w-4 mr-2" />
+                Hire Agent
+              </>
+            )}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )

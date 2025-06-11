@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { creditSystem } from '@/lib/ai/credit-system';
 import { prisma } from '@/lib/db/prisma';
 import { ErrorHandler } from '@/lib/error-handler';
 
@@ -36,7 +35,7 @@ export async function GET(req: NextRequest) {
     
     // Calculate date range based on period
     const now = new Date();
-    let startDate = new Date();
+    const startDate = new Date(); // Changed to const since it's always reassigned
     
     switch (period) {
       case 'day':
@@ -118,7 +117,7 @@ export async function GET(req: NextRequest) {
     `;
 
     // Get usage by agent (if not filtered by agent)
-    let usageByAgent = [];
+    let usageByAgent: unknown[] = [];
     if (!agentId) {
       usageByAgent = await prisma.$queryRaw`
         SELECT 
@@ -150,15 +149,18 @@ export async function GET(req: NextRequest) {
       usageByModel,
       usageByAgent,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     ErrorHandler.logError(
       ErrorHandler.createCustomError({
         errorCode: 'get_usage_error',
-        errorMessage: error.message,
-        payload: { error: error.stack }
+        errorMessage,
+        payload: { error: errorStack }
       })
     );
     
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

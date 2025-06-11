@@ -1,12 +1,10 @@
 /**
- * Storage Service Factory
+ * Storage Service Factory - Supabase Only
  * 
- * Provides a singleton instance of the StorageService.
- * Following Airbnb Style Guide for code formatting.
+ * Provides a singleton instance of the StorageService using Supabase Storage.
  */
 
 import { StorageService } from './storage-service';
-import { getStorageConfig } from './config';
 import { ErrorHandler } from '../error-handler';
 
 // Create a singleton instance of the error handler for storage operations
@@ -22,8 +20,7 @@ let storageServiceInstance: StorageService | null = null;
  */
 export function getStorageService(): StorageService {
   if (!storageServiceInstance) {
-    const config = getStorageConfig();
-    storageServiceInstance = new StorageService(config, errorHandler);
+    storageServiceInstance = new StorageService(errorHandler);
   }
   return storageServiceInstance;
 }
@@ -31,6 +28,3 @@ export function getStorageService(): StorageService {
 // Export other storage-related components
 export * from './types';
 export * from './storage-service';
-export * from './s3-provider';
-export * from './supabase-provider';
-export * from './config';

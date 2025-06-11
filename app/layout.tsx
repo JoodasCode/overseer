@@ -1,7 +1,7 @@
 import type React from "react"
 import "./globals.css"
 import type { Metadata } from "next"
-import { AuthProvider } from "@/lib/auth/supabase-auth-provider"
+import { SupabaseAuthProvider } from "@/lib/auth/supabase-auth-provider"
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
@@ -16,12 +16,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans antialiased">
-        <AuthProvider>
+        <SupabaseAuthProvider>
           {children}
           <Toaster />
-        </AuthProvider>
+        </SupabaseAuthProvider>
       </body>
     </html>
   )

@@ -10,76 +10,91 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
+import { getAgentAvatarUrl } from '@/lib/dicebear-avatar'
 
 const tasks = [
   {
     id: 1,
-    title: "Analyze Q4 Revenue Report",
-    description: "Review quarterly revenue data and generate insights",
-    status: "In Progress",
+    title: "Q1 Strategic Planning",
+    description: "Develop comprehensive strategy for Q1 initiatives and team coordination",
+    status: "Complete",
     priority: "High",
     assignedAgent: "Alex",
     avatar: "🧑‍💼",
     avatarUrl: "/avatars/alex.jpg",
+    progress: 100,
     dueDate: "2024-01-20",
-    progress: 75,
-    estimatedHours: 4,
-    actualHours: 3
+    estimatedHours: 16,
+    actualHours: 14
   },
   {
     id: 2,
-    title: "Customer Support Ticket #4829",
-    description: "Resolve billing inquiry for enterprise client",
-    status: "Review",
-    priority: "Medium",
-    assignedAgent: "Toby",
-    avatar: "👨‍💻",
-    avatarUrl: "/avatars/toby.jpg",
-    dueDate: "2024-01-18",
-    progress: 100,
-    estimatedHours: 2,
-    actualHours: 1.5
-  },
-  {
-    id: 3,
-    title: "Blog Content Generation",
-    description: "Create 5 blog posts for marketing campaign",
-    status: "Assigned",
-    priority: "Low",
-    assignedAgent: "Riley",
-    avatar: "✍️",
-    avatarUrl: "/avatars/riley.jpg",
-    dueDate: "2024-01-25",
-    progress: 20,
-    estimatedHours: 8,
-    actualHours: 1.5
-  },
-  {
-    id: 4,
-    title: "Security Audit",
-    description: "Conduct weekly security system audit",
-    status: "Complete",
-    priority: "High",
-    assignedAgent: "Jamie",
-    avatar: "🛡️",
-    avatarUrl: "/avatars/jamie.jpg",
-    dueDate: "2024-01-16",
-    progress: 100,
-    estimatedHours: 3,
-    actualHours: 2.5
-  },
-  {
-    id: 5,
-    title: "API Integration Setup",
-    description: "Configure new CRM integration pipeline",
-    status: "Failed",
+    title: "Campaign Visual Assets",
+    description: "Create engaging visual content for marketing campaign launch",
+    status: "In Progress",
     priority: "High",
     assignedAgent: "Dana",
     avatar: "⚙️",
     avatarUrl: "/avatars/dana.jpg",
-    dueDate: "2024-01-17",
-    progress: 60,
+    progress: 75,
+    dueDate: "2024-01-18",
+    estimatedHours: 12,
+    actualHours: 8
+  },
+  {
+    id: 3,
+    title: "Team Morale Survey",
+    description: "Conduct quarterly team satisfaction and morale assessment",
+    status: "Review",
+    priority: "Medium",
+    assignedAgent: "Jamie",
+    avatar: "🛡️",
+    avatarUrl: "/avatars/jamie.jpg",
+    progress: 90,
+    dueDate: "2024-01-22",
     estimatedHours: 6,
+    actualHours: 5
+  },
+  {
+    id: 4,
+    title: "Performance Analytics Report",
+    description: "Generate comprehensive analytics report with KPI tracking",
+    status: "Assigned",
+    priority: "Medium",
+    assignedAgent: "Riley",
+    avatar: "✍️",
+    avatarUrl: "/avatars/riley.jpg",
+    progress: 25,
+    dueDate: "2024-01-25",
+    estimatedHours: 10,
+    actualHours: 2
+  },
+  {
+    id: 5,
+    title: "Customer Support Escalation",
+    description: "Handle urgent customer issues and crisis response",
+    status: "Failed",
+    priority: "High",
+    assignedAgent: "Toby",
+    avatar: "👨‍💻",
+    avatarUrl: "/avatars/toby.jpg",
+    progress: 40,
+    dueDate: "2024-01-16",
+    estimatedHours: 4,
+    actualHours: 6
+  },
+  {
+    id: 6,
+    title: "Internal Communication Strategy",
+    description: "Develop internal messaging framework for team coordination",
+    status: "In Progress",
+    priority: "Low",
+    assignedAgent: "Jamie",
+    avatar: "🛡️",
+    avatarUrl: "/avatars/jamie.jpg",
+    progress: 60,
+    dueDate: "2024-01-30",
+    estimatedHours: 8,
     actualHours: 4
   }
 ]
@@ -260,7 +275,10 @@ export default function TasksPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage src={task.avatarUrl} alt={task.assignedAgent} />
+                          <AvatarImage 
+                            src={`https://api.dicebear.com/9.x/croodles/svg?seed=${task.assignedAgent.toLowerCase()}&size=100`}
+                            alt={task.assignedAgent} 
+                          />
                           <AvatarFallback>{task.avatar}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm font-medium">{task.assignedAgent}</span>

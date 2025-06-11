@@ -16,7 +16,7 @@ interface Agent {
   status: string;
   last_active: string;
   department_type: string | null;
-  personality_profile: any;
+  personality_profile: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
   updated_at: string;

@@ -1,30 +1,25 @@
 /**
- * File Storage Types
+ * Storage Types - Supabase Only
  * 
- * This file defines the types used by the file storage system.
+ * Type definitions for the storage service using Supabase Storage.
  */
 
 export enum StorageProvider {
-  LOCAL = 'local',
-  S3 = 's3',
   SUPABASE = 'supabase',
-  // Add more providers as needed
 }
 
+/**
+ * Storage configuration for Supabase
+ */
 export interface StorageConfig {
-  provider: StorageProvider;
-  bucketName?: string;
-  region?: string;
-  endpoint?: string;
-  accessKeyId?: string;
-  secretAccessKey?: string;
-  localPath?: string;
-  maxSizeBytes?: number;
-  // Supabase Storage configuration
-  supabaseUrl?: string;
-  supabaseKey?: string;
+  provider: StorageProvider.SUPABASE;
+  supabaseUrl: string;
+  supabaseKey: string;
 }
 
+/**
+ * File metadata stored in the database
+ */
 export interface FileMetadata {
   id: string;
   name: string;
@@ -40,22 +35,29 @@ export interface FileMetadata {
   metadata?: Record<string, any>;
 }
 
+/**
+ * Options for file upload
+ */
 export interface UploadOptions {
   isPublic?: boolean;
-  metadata?: Record<string, any>;
   maxSizeBytes?: number;
   allowedMimeTypes?: string[];
+  metadata?: Record<string, any>;
 }
 
+/**
+ * Options for generating presigned URLs
+ */
 export interface PresignedUrlOptions {
   expiresInSeconds?: number;
-  contentType?: string;
   maxSizeBytes?: number;
 }
 
+/**
+ * Storage statistics for a user
+ */
 export interface StorageStats {
   totalFiles: number;
   totalSize: number;
-  usageByProvider: Record<StorageProvider, number>;
-  usageByMimeType: Record<string, number>;
+  mimeTypes: Record<string, { count: number; size: number }>;
 }

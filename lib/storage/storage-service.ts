@@ -1,25 +1,25 @@
 /**
- * Storage Service
+ * Storage Service - Supabase Only
  * 
- * Handles file storage operations for the Overseer platform.
- * Following Airbnb Style Guide for code formatting.
+ * Handles file storage operations using Supabase Storage.
  */
 
-import fs from 'fs';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
 import {
-  StorageConfig,
   StorageProvider,
   FileMetadata,
   UploadOptions,
   PresignedUrlOptions,
   StorageStats,
 } from './types';
-import { S3Provider } from './s3-provider';
-import { SupabaseProvider } from './supabase-provider';
 import { ErrorHandler } from '../error-handler';
-import prisma from '../db/prisma';
+
+// Create Supabase client for file operations
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 // Default options
 const DEFAULT_UPLOAD_OPTIONS: UploadOptions = {
@@ -34,39 +34,14 @@ const DEFAULT_PRESIGNED_URL_OPTIONS: PresignedUrlOptions = {
 };
 
 export class StorageService {
-  private config: StorageConfig;
-  private s3Provider?: S3Provider;
-  private supabaseProvider?: SupabaseProvider;
   private errorHandler: ErrorHandler;
 
-  constructor(config: StorageConfig, errorHandler: ErrorHandler) {
-    this.config = config;
+  constructor(errorHandler: ErrorHandler) {
     this.errorHandler = errorHandler;
-
-    // Initialize the appropriate client based on the provider
-    if (config.provider === StorageProvider.S3) {
-      this.s3Provider = new S3Provider(config, errorHandler);
-    } else if (config.provider === StorageProvider.SUPABASE) {
-      this.supabaseProvider = new SupabaseProvider(config, errorHandler);
-    } else if (config.provider === StorageProvider.LOCAL) {
-      // Ensure the local storage directory exists
-      if (config.localPath) {
-        fs.mkdirSync(config.localPath, { recursive: true });
-      } else {
-        throw new Error('Local storage path not specified');
-      }
-    }
   }
 
   /**
-   * Upload a file to storage
-   * 
-   * @param file - The file buffer to upload
-   * @param fileName - The name of the file
-   * @param mimeType - The MIME type of the file
-   * @param ownerId - The ID of the file owner
-   * @param options - Upload options
-   * @returns The metadata of the uploaded file
+   * Upload a file to Supabase Storage
    */
   async uploadFile(
     file: Buffer,
@@ -100,15 +75,28 @@ export class StorageService {
       const safeName = this.sanitizeFileName(fileName);
       const filePath = `${ownerId}/${fileId}/${safeName}`;
       
-      // Upload the file based on the provider
-      let url: string | undefined;
+      // Choose bucket based on visibility
+      const bucket = mergedOptions.isPublic ? 'public-files' : 'private-files';
       
-      if (this.config.provider === StorageProvider.LOCAL) {
-        await this.uploadToLocalStorage(file, filePath);
-      } else if (this.config.provider === StorageProvider.S3) {
-        url = await this.uploadToS3(file, filePath, mimeType, mergedOptions.isPublic);
-      } else if (this.config.provider === StorageProvider.SUPABASE) {
-        url = await this.uploadToSupabase(file, filePath, mimeType, mergedOptions.isPublic);
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, {
+          contentType: mimeType,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`Failed to upload to Supabase Storage: ${uploadError.message}`);
+      }
+
+      // Get public URL if public
+      let url: string | undefined;
+      if (mergedOptions.isPublic) {
+        const { data: urlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(filePath);
+        url = urlData.publicUrl;
       }
 
       // Create file metadata
@@ -119,7 +107,7 @@ export class StorageService {
         mimeType,
         path: filePath,
         url,
-        provider: this.config.provider,
+        provider: StorageProvider.SUPABASE,
         ownerId,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -128,8 +116,9 @@ export class StorageService {
       };
 
       // Save metadata to database
-      await prisma.file.create({
-        data: {
+      const { error: dbError } = await supabase
+        .from('files')
+        .insert({
           id: metadata.id,
           name: metadata.name,
           size: metadata.size,
@@ -139,9 +128,16 @@ export class StorageService {
           provider: metadata.provider,
           ownerId: metadata.ownerId,
           isPublic: metadata.isPublic,
-          metadata: metadata.metadata as any,
-        },
-      });
+          metadata: metadata.metadata,
+          createdAt: metadata.createdAt.toISOString(),
+          updatedAt: metadata.updatedAt.toISOString(),
+        });
+
+      if (dbError) {
+        // Try to clean up uploaded file if database insert fails
+        await supabase.storage.from(bucket).remove([filePath]);
+        throw new Error(`Failed to save file metadata: ${dbError.message}`);
+      }
 
       return metadata;
     } catch (error) {
@@ -156,20 +152,18 @@ export class StorageService {
   }
 
   /**
-   * Get a file from storage
-   * 
-   * @param fileId - The ID of the file to get
-   * @param ownerId - The ID of the file owner (for access control)
-   * @returns The file buffer and metadata
+   * Get a file from Supabase Storage
    */
   async getFile(fileId: string, ownerId: string): Promise<{ buffer: Buffer; metadata: FileMetadata }> {
     try {
       // Get file metadata from database
-      const fileRecord = await prisma.file.findUnique({
-        where: { id: fileId },
-      });
+      const { data: fileRecord, error } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', fileId)
+        .single();
 
-      if (!fileRecord) {
+      if (error || !fileRecord) {
         throw new Error(`File with ID ${fileId} not found`);
       }
 
@@ -188,24 +182,25 @@ export class StorageService {
         url: fileRecord.url || undefined,
         provider: fileRecord.provider as StorageProvider,
         ownerId: fileRecord.ownerId,
-        createdAt: fileRecord.createdAt,
-        updatedAt: fileRecord.updatedAt,
+        createdAt: new Date(fileRecord.createdAt),
+        updatedAt: new Date(fileRecord.updatedAt),
         isPublic: fileRecord.isPublic,
-        metadata: fileRecord.metadata as Record<string, any> || {},
+        metadata: fileRecord.metadata || {},
       };
 
-      // Get the file based on the provider
-      let buffer: Buffer;
-      
-      if (metadata.provider === StorageProvider.LOCAL) {
-        buffer = await this.getFromLocalStorage(metadata.path);
-      } else if (metadata.provider === StorageProvider.S3) {
-        buffer = await this.getFromS3(metadata.path);
-      } else if (metadata.provider === StorageProvider.SUPABASE) {
-        buffer = await this.getFromSupabase(metadata.path);
-      } else {
-        throw new Error(`Unsupported storage provider: ${metadata.provider}`);
+      // Download file from Supabase Storage
+      const bucket = metadata.isPublic ? 'public-files' : 'private-files';
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from(bucket)
+        .download(metadata.path);
+
+      if (downloadError || !fileData) {
+        throw new Error(`Failed to download file: ${downloadError?.message}`);
       }
+
+      // Convert blob to buffer
+      const arrayBuffer = await fileData.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
       return { buffer, metadata };
     } catch (error) {
@@ -220,20 +215,18 @@ export class StorageService {
   }
 
   /**
-   * Delete a file from storage
-   * 
-   * @param fileId - The ID of the file to delete
-   * @param ownerId - The ID of the file owner (for access control)
-   * @returns True if the file was deleted successfully
+   * Delete a file from Supabase Storage
    */
   async deleteFile(fileId: string, ownerId: string): Promise<boolean> {
     try {
       // Get file metadata from database
-      const fileRecord = await prisma.file.findUnique({
-        where: { id: fileId },
-      });
+      const { data: fileRecord, error: getError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', fileId)
+        .single();
 
-      if (!fileRecord) {
+      if (getError || !fileRecord) {
         throw new Error(`File with ID ${fileId} not found`);
       }
 
@@ -242,19 +235,26 @@ export class StorageService {
         throw new Error('Access denied');
       }
 
-      // Delete the file based on the provider
-      if (fileRecord.provider === StorageProvider.LOCAL) {
-        await this.deleteFromLocalStorage(fileRecord.path);
-      } else if (fileRecord.provider === StorageProvider.S3) {
-        await this.deleteFromS3(fileRecord.path);
-      } else if (fileRecord.provider === StorageProvider.SUPABASE) {
-        await this.deleteFromSupabase(fileRecord.path);
+      // Delete file from Supabase Storage
+      const bucket = fileRecord.isPublic ? 'public-files' : 'private-files';
+      const { error: storageError } = await supabase.storage
+        .from(bucket)
+        .remove([fileRecord.path]);
+
+      if (storageError) {
+        console.warn(`Failed to delete file from storage: ${storageError.message}`);
+        // Continue with database deletion even if storage deletion fails
       }
 
       // Delete metadata from database
-      await prisma.file.delete({
-        where: { id: fileId },
-      });
+      const { error: deleteError } = await supabase
+        .from('files')
+        .delete()
+        .eq('id', fileId);
+
+      if (deleteError) {
+        throw new Error(`Failed to delete file metadata: ${deleteError.message}`);
+      }
 
       return true;
     } catch (error) {
@@ -269,12 +269,7 @@ export class StorageService {
   }
 
   /**
-   * Generate a presigned URL for direct file upload
-   * 
-   * @param fileName - The name of the file to upload
-   * @param ownerId - The ID of the file owner
-   * @param options - Presigned URL options
-   * @returns The presigned URL and file ID
+   * Generate a presigned URL for file upload
    */
   async generatePresignedUploadUrl(
     fileName: string,
@@ -282,25 +277,25 @@ export class StorageService {
     options: PresignedUrlOptions = {},
   ): Promise<{ url: string; fileId: string; fields?: Record<string, string>; expiresAt: Date }> {
     try {
-      // Merge with default options
       const mergedOptions = { ...DEFAULT_PRESIGNED_URL_OPTIONS, ...options };
+      const fileId = uuidv4();
+      const safeName = this.sanitizeFileName(fileName);
+      const filePath = `${ownerId}/${fileId}/${safeName}`;
       
-      // Generate presigned URL based on provider
-      if (this.config.provider === StorageProvider.S3) {
-        if (!this.s3Provider) {
-          throw new Error('S3 provider not initialized');
-        }
-        return this.s3Provider.generatePresignedUploadUrl(fileName, ownerId, mergedOptions);
-      } else if (this.config.provider === StorageProvider.SUPABASE) {
-        if (!this.supabaseProvider) {
-          throw new Error('Supabase provider not initialized');
-        }
-        // Use public bucket for presigned uploads by default
-        const bucket = 'public-files';
-        return this.supabaseProvider.generatePresignedUploadUrl(bucket, fileName, ownerId, mergedOptions);
-      } else {
-        throw new Error(`Presigned URLs are not supported for ${this.config.provider} storage`);
-      }
+      // For now, return a placeholder - Supabase doesn't have direct presigned uploads
+      // Users would need to upload through the API
+      const expiresAt = new Date();
+      expiresAt.setSeconds(expiresAt.getSeconds() + mergedOptions.expiresInSeconds!);
+
+      return {
+        url: `/api/storage/upload`, // Use our API endpoint
+        fileId,
+        fields: {
+          filePath,
+          fileName,
+        },
+        expiresAt,
+      };
     } catch (error) {
       this.errorHandler.handle({
         error: error as Error,
@@ -314,217 +309,57 @@ export class StorageService {
 
   /**
    * Get storage statistics for a user
-   * 
-   * @param ownerId - The ID of the user
-   * @returns Storage statistics
    */
   async getStorageStats(ownerId: string): Promise<StorageStats> {
     try {
-      // Get all files for the user
-      const files = await prisma.file.findMany({
-        where: { ownerId },
-      });
+      // Get all files for the user from database
+      const { data: files, error } = await supabase
+        .from('files')
+        .select('size, mimeType')
+        .eq('ownerId', ownerId);
+
+      if (error) {
+        throw new Error(`Failed to get files: ${error.message}`);
+      }
 
       // Calculate statistics
       const totalFiles = files.length;
-      const totalSize = files.reduce((sum: number, file: any) => sum + file.size, 0);
+      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
       
-      // Calculate usage by provider
-      const usageByProvider = files.reduce((acc: Record<string, number>, file: any) => {
-        const provider = file.provider as StorageProvider;
-        acc[provider] = (acc[provider] || 0) + file.size;
-        return acc;
-      }, {} as Record<string, number>);
-      
-      // Calculate usage by MIME type
-      const usageByMimeType = files.reduce((acc: Record<string, number>, file: any) => {
-        acc[file.mimeType] = (acc[file.mimeType] || 0) + file.size;
-        return acc;
-      }, {} as Record<string, number>);
+      // Group by MIME type
+      const mimeTypes: Record<string, { count: number; size: number }> = {};
+      files.forEach((file) => {
+        const mimeType = file.mimeType;
+        if (!mimeTypes[mimeType]) {
+          mimeTypes[mimeType] = { count: 0, size: 0 };
+        }
+        mimeTypes[mimeType].count++;
+        mimeTypes[mimeType].size += file.size;
+      });
 
       return {
         totalFiles,
         totalSize,
-        usageByProvider,
-        usageByMimeType,
+        mimeTypes,
       };
     } catch (error) {
       this.errorHandler.handle({
         error: error as Error,
         source: 'StorageService.getStorageStats',
-        message: 'Failed to get storage statistics',
+        message: `Failed to get storage stats for user ${ownerId}`,
         userId: ownerId,
       });
       throw error;
     }
   }
 
-  // Private helper methods
-
   /**
-   * Upload a file to local storage
-   * 
-   * @param file - The file buffer to upload
-   * @param filePath - The path to save the file to
-   */
-  private async uploadToLocalStorage(file: Buffer, filePath: string): Promise<void> {
-    const fullPath = path.join(this.config.localPath!, filePath);
-    const directory = path.dirname(fullPath);
-    
-    // Create directory if it doesn't exist
-    fs.mkdirSync(directory, { recursive: true });
-    
-    // Write file
-    await fs.promises.writeFile(fullPath, file);
-  }
-
-  /**
-   * Get a file from local storage
-   * 
-   * @param filePath - The path of the file to get
-   * @returns The file buffer
-   */
-  private async getFromLocalStorage(filePath: string): Promise<Buffer> {
-    const fullPath = path.join(this.config.localPath!, filePath);
-    return fs.promises.readFile(fullPath);
-  }
-
-  /**
-   * Delete a file from local storage
-   * 
-   * @param filePath - The path of the file to delete
-   */
-  private async deleteFromLocalStorage(filePath: string): Promise<void> {
-    const fullPath = path.join(this.config.localPath!, filePath);
-    await fs.promises.unlink(fullPath);
-  }
-
-  /**
-   * Upload a file to S3
-   * 
-   * @param file - The file buffer to upload
-   * @param filePath - The path to save the file to
-   * @param mimeType - The MIME type of the file
-   * @param isPublic - Whether the file should be publicly accessible
-   * @returns The URL of the uploaded file
-   */
-  private async uploadToS3(
-    file: Buffer,
-    filePath: string,
-    mimeType: string,
-    isPublic: boolean = false,
-  ): Promise<string> {
-    if (!this.s3Provider) {
-      throw new Error('S3 provider not initialized');
-    }
-    
-    return this.s3Provider.uploadFile(file, filePath, mimeType);
-  }
-
-  /**
-   * Get a file from S3
-   * 
-   * @param filePath - The path of the file to get
-   * @returns The file buffer
-   */
-  private async getFromS3(filePath: string): Promise<Buffer> {
-    if (!this.s3Provider) {
-      throw new Error('S3 provider not initialized');
-    }
-    
-    return this.s3Provider.getFile(filePath);
-  }
-
-  /**
-   * Delete a file from S3
-   * 
-   * @param filePath - The path of the file to delete
-   */
-  private async deleteFromS3(filePath: string): Promise<void> {
-    if (!this.s3Provider) {
-      throw new Error('S3 provider not initialized');
-    }
-    
-    const success = await this.s3Provider.deleteFile(filePath);
-    if (!success) {
-      throw new Error(`Failed to delete file from S3: ${filePath}`);
-    }
-  }
-
-  /**
-   * Upload a file to Supabase Storage
-   * 
-   * @param file - The file buffer to upload
-   * @param filePath - The path to save the file to
-   * @param mimeType - The MIME type of the file
-   * @param isPublic - Whether the file should be publicly accessible
-   * @returns The URL of the uploaded file
-   */
-  private async uploadToSupabase(
-    file: Buffer,
-    filePath: string,
-    mimeType: string,
-    isPublic: boolean = false,
-  ): Promise<string> {
-    if (!this.supabaseProvider) {
-      throw new Error('Supabase provider not initialized');
-    }
-    
-    // Use a default bucket - we'll need to create this
-    const bucket = isPublic ? 'public-files' : 'private-files';
-    return this.supabaseProvider.uploadFile(file, bucket, filePath, mimeType, isPublic);
-  }
-
-  /**
-   * Get a file from Supabase Storage
-   * 
-   * @param filePath - The path of the file to get
-   * @returns The file buffer
-   */
-  private async getFromSupabase(filePath: string): Promise<Buffer> {
-    if (!this.supabaseProvider) {
-      throw new Error('Supabase provider not initialized');
-    }
-    
-    // Extract bucket and key from the path
-    const [bucket, ...keyParts] = filePath.split('/');
-    const key = keyParts.join('/');
-    
-    return this.supabaseProvider.getFile(bucket, key);
-  }
-
-  /**
-   * Delete a file from Supabase Storage
-   * 
-   * @param filePath - The path of the file to delete
-   */
-  private async deleteFromSupabase(filePath: string): Promise<void> {
-    if (!this.supabaseProvider) {
-      throw new Error('Supabase provider not initialized');
-    }
-    
-    // Extract bucket and key from the path
-    const [bucket, ...keyParts] = filePath.split('/');
-    const key = keyParts.join('/');
-    
-    const success = await this.supabaseProvider.deleteFile(bucket, key);
-    if (!success) {
-      throw new Error(`Failed to delete file from Supabase Storage: ${filePath}`);
-    }
-  }
-
-  /**
-   * Sanitize a file name to prevent path traversal attacks
-   * 
-   * @param fileName - The file name to sanitize
-   * @returns The sanitized file name
+   * Sanitize file name for safe storage
    */
   private sanitizeFileName(fileName: string): string {
-    // Remove path traversal characters and normalize
     return fileName
-      .replace(/\.\.\//g, '')
-      .replace(/\\/g, '')
-      .replace(/\//g, '')
-      .replace(/[^\w.-]/g, '_');
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/_{2,}/g, '_')
+      .toLowerCase();
   }
 }

@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       console.log('✅ Auth callback successful:', { user: data.user?.email });
       
       // Redirect to dashboard after successful authentication
-      return NextResponse.redirect(new URL('/', requestUrl.origin));
+      return NextResponse.redirect(new URL('/dashboard', requestUrl.origin));
     } catch (error) {
       console.log('❌ Auth callback exception:', error);
       return NextResponse.redirect(new URL('/?auth_error=unknown&message=Authentication failed', requestUrl.origin));

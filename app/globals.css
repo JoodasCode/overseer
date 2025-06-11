@@ -153,9 +153,20 @@
   * {
     @apply border-border;
   }
+  
+  html {
+    /* Prevent browser from adding transition and margin styles for scrollbar compensation */
+    transition-property: none !important;
+    margin-right: 0 !important;
+    overflow-x: hidden;
+  }
+  
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Ensure consistent scrollbar behavior */
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
   }
 }
 

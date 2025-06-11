@@ -8,79 +8,80 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { getAgentAvatarUrl } from '@/lib/dicebear-avatar'
 
 const activities = [
   {
     id: 1,
     type: "task_completed",
     title: "Task Completed",
-    description: "Security audit completed successfully",
-    agent: "Jamie",
-    avatar: "🛡️",
-    avatarUrl: "/avatars/jamie.jpg",
+    description: "Strategic quarterly planning completed successfully",
+    agent: "Alex",
+    avatar: "🧑‍💼",
+    avatarUrl: "/avatars/alex.jpg",
     timestamp: "2024-01-15T14:30:00Z",
     status: "success",
-    details: "Weekly security system audit finished on schedule"
+    details: "Strategic Coordinator Alex finished quarterly planning analysis on schedule"
   },
   {
     id: 2,
     type: "agent_started",
     title: "Agent Started",
-    description: "Alex began working on Q4 revenue analysis",
-    agent: "Alex",
-    avatar: "🧑‍💼",
-    avatarUrl: "/avatars/alex.jpg",
+    description: "Dana began working on visual content for campaign",
+    agent: "Dana",
+    avatar: "⚙️",
+    avatarUrl: "/avatars/dana.jpg",
     timestamp: "2024-01-15T13:45:00Z",
     status: "info",
-    details: "Strategic analysis phase initiated"
+    details: "Visual Assistant started design work for Q1 campaign materials"
   },
   {
     id: 3,
     type: "task_failed",
     title: "Task Failed",
-    description: "API integration setup encountered errors",
-    agent: "Dana",
-    avatar: "⚙️",
-    avatarUrl: "/avatars/dana.jpg",
+    description: "Data integration setup encountered errors",
+    agent: "Riley",
+    avatar: "✍️",
+    avatarUrl: "/avatars/riley.jpg",
     timestamp: "2024-01-15T12:20:00Z",
     status: "error",
-    details: "Connection timeout during CRM integration"
+    details: "Data Analyst Riley encountered connection timeout during analytics setup"
   },
   {
     id: 4,
     type: "collaboration",
     title: "Agent Collaboration",
-    description: "Toby requested assistance from Riley",
-    agent: "Toby",
-    avatar: "👨‍💻",
-    avatarUrl: "/avatars/toby.jpg",
+    description: "Jamie initiated team morale check-in",
+    agent: "Jamie",
+    avatar: "🛡️",
+    avatarUrl: "/avatars/jamie.jpg",
     timestamp: "2024-01-15T11:15:00Z",
     status: "info",
-    details: "Customer support case escalated for content review"
+    details: "Internal Liaison Jamie started team communication to boost morale"
   },
   {
     id: 5,
     type: "task_assigned",
     title: "Task Assigned",
-    description: "Blog content generation assigned to Riley",
+    description: "Crisis response protocol assigned to Toby",
     agent: "System",
     avatar: "🤖",
     avatarUrl: null,
     timestamp: "2024-01-15T10:30:00Z",
     status: "info",
-    details: "Marketing campaign content creation"
+    details: "Support Coordinator Toby assigned to handle urgent customer inquiry"
   },
   {
     id: 6,
     type: "agent_offline",
     title: "Agent Offline",
-    description: "Dana went offline unexpectedly",
-    agent: "Dana",
-    avatar: "⚙️",
-    avatarUrl: "/avatars/dana.jpg",
+    description: "Toby went offline during active support session",
+    agent: "Toby",
+    avatar: "👨‍💻",
+    avatarUrl: "/avatars/toby.jpg",
     timestamp: "2024-01-15T09:45:00Z",
     status: "warning",
-    details: "System connection lost during active task"
+    details: "Support Coordinator system connection lost during customer support task"
   }
 ]
 
@@ -243,7 +244,10 @@ export default function ActivityLogPage() {
                     </div>
                     {activity.avatar ? (
                       <Avatar className="h-8 w-8">
-                        {activity.avatarUrl && <AvatarImage src={activity.avatarUrl} alt={activity.agent} />}
+                        <AvatarImage 
+                          src={`https://api.dicebear.com/9.x/croodles/svg?seed=${activity.agent.toLowerCase()}&size=100`}
+                          alt={activity.agent} 
+                        />
                         <AvatarFallback>{activity.avatar}</AvatarFallback>
                       </Avatar>
                     ) : (

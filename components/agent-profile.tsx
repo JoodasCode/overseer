@@ -43,7 +43,6 @@ export function AgentProfile({ agent, onBack }: AgentProfileProps) {
   // Get computed values from the new schema
   const role = agent.preferences?.role || agent.role || 'Agent'
   const avatar = agent.avatar_url || agent.avatar || '🤖'
-  const persona = agent.personality || agent.persona || 'Helpful AI Assistant'
   const tone = agent.preferences?.tone || agent.tone || null
   const voice_style = agent.preferences?.voice_style || agent.voice_style || null
   const level = agent.level || 1
@@ -52,7 +51,6 @@ export function AgentProfile({ agent, onBack }: AgentProfileProps) {
   const lastActive = new Date(agent.updated_at).toLocaleDateString() || agent.lastActive
   const tools_preferred = agent.preferences?.tools_preferred || agent.tools_preferred || agent.tools || []
   const favoriteTools = agent.favoriteTools || agent.tools?.slice(0, 3) || []
-  const personality_config = agent.preferences?.personality_config || agent.personality_config || {}
   const memory = agent.memory || { skillsUnlocked: [], recentLearnings: [], preferences: [], memoryLogs: [] }
 
   return (

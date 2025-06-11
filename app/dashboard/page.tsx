@@ -8,13 +8,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getAgentAvatarUrl } from '@/lib/dicebear-avatar'
 
 const agents = [
   {
     id: 1,
     name: "Alex",
     role: "Strategic Coordinator",
-    department: "Analytics",
+    department: "Communications",
     status: "Active",
     performance: 94,
     tasks: 12,
@@ -24,21 +25,21 @@ const agents = [
   },
   {
     id: 2,
-    name: "Toby",
-    role: "Customer Success Agent",
-    department: "Support",
+    name: "Dana",
+    role: "Visual Assistant",
+    department: "Communications",
     status: "Active",
     performance: 89,
     tasks: 8,
     lastActivity: "5 minutes ago",
-    avatar: "👨‍💻",
-    avatarUrl: "/avatars/toby.jpg"
+    avatar: "⚙️",
+    avatarUrl: "/avatars/dana.jpg"
   },
   {
     id: 3,
     name: "Riley",
-    role: "Content Creator",
-    department: "Marketing",
+    role: "Data Analyst",
+    department: "Communications",
     status: "Idle",
     performance: 76,
     tasks: 3,
@@ -49,8 +50,8 @@ const agents = [
   {
     id: 4,
     name: "Jamie",
-    role: "Security Specialist",
-    department: "Security",
+    role: "Internal Liaison",
+    department: "Communications",
     status: "Active",
     performance: 98,
     tasks: 15,
@@ -60,15 +61,15 @@ const agents = [
   },
   {
     id: 5,
-    name: "Dana",
-    role: "Integration Manager",
-    department: "Operations",
+    name: "Toby",
+    role: "Support Coordinator",
+    department: "Communications",
     status: "Error",
     performance: 45,
     tasks: 0,
     lastActivity: "15 minutes ago",
-    avatar: "⚙️",
-    avatarUrl: "/avatars/dana.jpg"
+    avatar: "👨‍💻",
+    avatarUrl: "/avatars/toby.jpg"
   }
 ]
 
@@ -94,7 +95,7 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Welcome back, John</h2>
           <p className="text-muted-foreground">
-            Here's a snapshot of your AI operations today.
+            Here&apos;s a snapshot of your AI operations today.
           </p>
         </div>
 
@@ -186,10 +187,11 @@ export default function DashboardPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={agent.avatarUrl} alt={agent.name} />
-                          <AvatarFallback>
-                            {agent.avatar}
-                          </AvatarFallback>
+                          <AvatarImage 
+                            src={`https://api.dicebear.com/9.x/croodles/svg?seed=${agent.name.toLowerCase()}&size=100`}
+                            alt={agent.name} 
+                          />
+                          <AvatarFallback>{agent.avatar}</AvatarFallback>
                         </Avatar>
                         <div>
                           <div className="font-medium">{agent.name}</div>

@@ -1,142 +1,100 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session, AuthError } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase-client';
+import { User, Session } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signInWithGoogle: () => Promise<{ error: any }>;
+  signInWithGitHub: () => Promise<{ error: any }>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
+  signOut: () => Promise<void>;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signInWithGoogle: () => Promise<{ error: AuthError | null }>;
-  signInWithGitHub: () => Promise<{ error: AuthError | null }>;
-  signOut: () => Promise<{ error: AuthError | null }>;
-  resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
-
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export function SupabaseAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const supabase = createClient();
 
-  // Debug logging
   console.log('🔧 AuthProvider initialized with:', {
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Missing',
     supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Missing'
   });
 
+  // Track session changes to detect multiple logins
+  const handleSessionChange = (newSession: Session | null, event?: string) => {
+    if (!mounted) return; // Prevent hydration issues
+    
+    if (newSession && session && newSession.user.id !== session.user.id) {
+      console.warn('⚠️ SECURITY ALERT: Multiple user sessions detected!');
+      console.warn('Previous user:', session.user.email);
+      console.warn('New user:', newSession.user.email);
+      
+      // Force sign out the previous session
+      signOut();
+      return;
+    }
+    
+    setSession(newSession);
+    setUser(newSession?.user ?? null);
+    
+    if (event) {
+      console.log('🔄 Auth state changed:', event, newSession?.user?.email);
+    }
+    console.log('🔑 Auth token updated:', newSession?.access_token ? 'Present' : 'None');
+  };
+
   useEffect(() => {
-    let mounted = true;
-
-    // Get initial session with multiple fallback strategies
+    // Set mounted state
+    setMounted(true);
+    
+    // Get initial session
     const getInitialSession = async () => {
-      try {
-        console.log('🔍 Getting initial session...');
-        
-        // Strategy 1: Try getSession first
-        let { data: { session }, error } = await supabase.auth.getSession();
-        
-        console.log('📋 Initial session result:', { 
-          session: session ? 'Found' : 'None', 
-          error: error ? error.message : 'None',
-          user: session?.user ? { 
-            id: session.user.id, 
-            email: session.user.email 
-          } : 'None'
-        });
-
-        // Strategy 2: If no session, try getUser as fallback
-        if (!session && !error) {
-          console.log('🔄 No session found, trying getUser fallback...');
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          if (user && !userError) {
-            console.log('✅ Found user via getUser fallback:', user.email);
-            // Create a minimal session object for consistency
-            session = {
-              access_token: 'fallback',
-              refresh_token: 'fallback',
-              expires_in: 3600,
-              token_type: 'bearer',
-              user
-            } as any;
-          }
-        }
-
-        if (mounted) {
-          if (session?.user) {
-            console.log('✅ User authenticated:', session.user.email);
-            setSession(session);
-            setUser(session.user);
-          } else {
-            console.log('❌ No authenticated user found');
-            setSession(null);
-            setUser(null);
-          }
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('❌ Auth initialization error:', error);
-        if (mounted) {
-          setSession(null);
-          setUser(null);
-          setLoading(false);
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('Error getting session:', error);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.access_token) {
+          console.log('🔑 Auth token updated: Present');
+        } else {
+          console.log('🔑 Auth token updated: None');
         }
       }
+      setLoading(false);
     };
 
     getInitialSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔄 Auth state changed:', { event, user: session?.user?.email || 'None' });
-        
-        if (mounted) {
-          setSession(session);
-          setUser(session?.user || null);
-          setLoading(false);
-        }
+      async (event: string, session: Session | null) => {
+        handleSessionChange(session, event);
+        setLoading(false);
       }
     );
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
+      setMounted(false);
     };
-  }, []);
-
-  // Debug current state
-  console.log('🔑 Auth token updated:', user ? user.email : 'None');
+  }, [supabase.auth]);
 
   const signIn = async (email: string, password: string) => {
-    console.log('🔐 Attempting sign in for:', email);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    
-    if (error) {
-      console.log('❌ Sign in error:', error.message);
-    } else {
-      console.log('✅ Sign in initiated for:', email);
-    }
-    
     return { error };
   };
 
@@ -168,11 +126,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return { error };
   };
 
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    return { error };
-  };
-
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/reset-password`,
@@ -180,16 +133,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return { error };
   };
 
+  const signOut = async () => {
+    console.log('🚪 Signing out user:', user?.email)
+    
+    // Clear local state immediately
+    setUser(null)
+    setSession(null)
+    
+    // Sign out from Supabase
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error('❌ Error signing out:', error)
+    } else {
+      console.log('✅ Successfully signed out')
+    }
+    
+    // Force clear any remaining storage (additional cleanup)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('supabase-auth-token')
+        localStorage.removeItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1] + '-auth-token')
+      } catch (e) {
+        console.warn('Could not clear storage:', e)
+      }
+    }
+  }
+
   const value = {
     user,
     session,
-    loading,
     signIn,
     signUp,
     signInWithGoogle,
     signInWithGitHub,
-    signOut,
     resetPassword,
+    signOut,
+    loading,
   };
 
   return (
@@ -197,4 +176,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within a SupabaseAuthProvider');
+  }
+  return context;
 } 

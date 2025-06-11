@@ -19,8 +19,7 @@ const nextConfig = {
     // Enable modern bundling optimizations
     optimizePackageImports: ['lucide-react', '@radix-ui/react-toast'],
   },
-  // Performance optimizations
-  swcMinify: true,
+  // Performance optimizations - swcMinify is enabled by default in Next.js 15
   modularizeImports: {
     'lucide-react': {
       transform: 'lucide-react/dist/esm/icons/{{member}}',
@@ -95,8 +94,7 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   // Enable compression
   compress: true,
-  // Optimize fonts
-  optimizeFonts: true,
+  // Font optimization is handled by Next.js 15 automatically
 }
 
 export default nextConfig

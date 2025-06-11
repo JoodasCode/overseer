@@ -1,89 +1,80 @@
 "use client"
 
 import { SharedLayout } from '@/components/shared/SharedLayout'
-import { Plus, Search, Play, Pause, Settings, Copy, Eye, Edit, Trash2, GitMerge } from "lucide-react"
+import { Plus, Search, Play, Pause, Settings, Copy, Eye, Edit, Trash2, GitMerge, Filter, ArrowRight, Bot, Zap, Clock, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { getAgentAvatarUrl } from '@/lib/dicebear-avatar'
 
 const workflows = [
   {
     id: 1,
-    name: "Daily Standup Automation",
-    description: "Automatically collect team updates and generate daily reports",
+    name: "Strategic Planning Workflow",
+    description: "Automated quarterly strategic planning and team coordination",
     status: "Active",
+    category: "Automation",
+    triggers: 3,
+    agents: ["Alex", "Jamie"],
     lastRun: "2 hours ago",
-    nextRun: "Tomorrow 9:00 AM",
-    successRate: 98,
-    totalRuns: 145,
+    nextRun: "In 4 hours",
+    successRate: 94,
+    totalRuns: 1247,
     creator: "Alex",
-    creatorAvatar: "🧑‍💼",
-    creatorAvatarUrl: "/avatars/alex.jpg",
-    agents: ["Alex", "Riley", "Toby"],
-    category: "Automation"
+    creatorAvatar: "A",
+    creatorAvatarUrl: `https://api.dicebear.com/9.x/croodles/svg?seed=alex&size=100`
   },
   {
     id: 2,
-    name: "Customer Support Escalation",
-    description: "Route high-priority tickets to appropriate agents",
+    name: "Visual Content Pipeline",
+    description: "Creative asset generation and approval workflow",
     status: "Active",
+    category: "Marketing",
+    triggers: 5,
+    agents: ["Dana", "Alex"],
     lastRun: "30 minutes ago",
-    nextRun: "On demand",
-    successRate: 94,
-    totalRuns: 89,
-    creator: "Toby",
-    creatorAvatar: "👨‍💻",
-    creatorAvatarUrl: "/avatars/toby.jpg",
-    agents: ["Toby", "Jamie"],
-    category: "Support"
+    nextRun: "In 2 hours",
+    successRate: 89,
+    totalRuns: 892,
+    creator: "Dana",
+    creatorAvatar: "D",
+    creatorAvatarUrl: `https://api.dicebear.com/9.x/croodles/svg?seed=dana&size=100`
   },
   {
     id: 3,
-    name: "Content Generation Pipeline",
-    description: "Generate, review, and publish marketing content",
+    name: "Analytics Reporting",
+    description: "Automated data analysis and performance reporting",
+    status: "Paused",
+    category: "Analytics",
+    triggers: 2,
+    agents: ["Riley"],
+    lastRun: "1 day ago",
+    nextRun: "Manual trigger",
+    successRate: 76,
+    totalRuns: 543,
+    creator: "Riley",
+    creatorAvatar: "R",
+    creatorAvatarUrl: `https://api.dicebear.com/9.x/croodles/svg?seed=riley&size=100`
+  },
+  {
+    id: 4,
+    name: "Crisis Response Protocol",
+    description: "Emergency support and escalation management",
     status: "Draft",
+    category: "Security",
+    triggers: 4,
+    agents: ["Toby", "Jamie"],
     lastRun: "Never",
     nextRun: "Not scheduled",
     successRate: 0,
     totalRuns: 0,
-    creator: "Riley",
-    creatorAvatar: "✍️",
-    creatorAvatarUrl: "/avatars/riley.jpg",
-    agents: ["Riley", "Alex"],
-    category: "Marketing"
-  },
-  {
-    id: 4,
-    name: "Security Monitoring",
-    description: "Monitor system security and generate alerts",
-    status: "Paused",
-    lastRun: "1 day ago",
-    nextRun: "Paused",
-    successRate: 100,
-    totalRuns: 24,
-    creator: "Jamie",
-    creatorAvatar: "🛡️",
-    creatorAvatarUrl: "/avatars/jamie.jpg",
-    agents: ["Jamie", "Dana"],
-    category: "Security"
-  },
-  {
-    id: 5,
-    name: "Data Analysis Workflow",
-    description: "Process and analyze business metrics automatically",
-    status: "Active",
-    lastRun: "1 hour ago",
-    nextRun: "Every 4 hours",
-    successRate: 87,
-    totalRuns: 234,
-    creator: "Dana",
-    creatorAvatar: "⚙️",
-    creatorAvatarUrl: "/avatars/dana.jpg",
-    agents: ["Dana", "Riley"],
-    category: "Analytics"
+    creator: "Toby",
+    creatorAvatar: "T",
+    creatorAvatarUrl: `https://api.dicebear.com/9.x/croodles/svg?seed=toby&size=100`
   }
 ]
 
@@ -253,8 +244,8 @@ export default function WorkflowBuilderPage() {
                             <Badge className={getStatusColor(workflow.status)}>
                               {workflow.status}
                             </Badge>
-                            <Badge variant="outline" className={getCategoryColor(workflow.category)}>
-                              {workflow.category}
+                            <Badge variant="outline" className={getCategoryColor('Automation')}>
+                              Automation
                             </Badge>
                           </div>
                           
@@ -269,7 +260,7 @@ export default function WorkflowBuilderPage() {
                             </div>
                             <div>
                               <span className="text-muted-foreground">Next run:</span>
-                              <div className="font-medium">{workflow.nextRun}</div>
+                              <div className="font-medium">Scheduled</div>
                             </div>
                             <div>
                               <span className="text-muted-foreground">Success rate:</span>
@@ -277,7 +268,7 @@ export default function WorkflowBuilderPage() {
                             </div>
                             <div>
                               <span className="text-muted-foreground">Total runs:</span>
-                              <div className="font-medium">{workflow.totalRuns}</div>
+                              <div className="font-medium">{workflow.successRate > 0 ? '100+' : '0'}</div>
                             </div>
                           </div>
 
@@ -286,10 +277,10 @@ export default function WorkflowBuilderPage() {
                               <span className="text-sm text-muted-foreground">Created by:</span>
                               <div className="flex items-center gap-1">
                                 <Avatar className="h-5 w-5">
-                                  <AvatarImage src={workflow.creatorAvatarUrl} alt={workflow.creator} />
-                                  <AvatarFallback>{workflow.creatorAvatar}</AvatarFallback>
+                                  <AvatarImage src={`https://api.dicebear.com/9.x/croodles/svg?seed=user&size=100`} alt="User" />
+                                  <AvatarFallback>U</AvatarFallback>
                                 </Avatar>
-                                <span className="text-sm font-medium">{workflow.creator}</span>
+                                <span className="text-sm font-medium">System</span>
                               </div>
                             </div>
                             
@@ -297,25 +288,13 @@ export default function WorkflowBuilderPage() {
                               <span className="text-sm text-muted-foreground">Agents:</span>
                               <div className="flex -space-x-1">
                                 {workflow.agents.slice(0, 3).map((agent, index) => {
-                                  // Map agent names to emojis and avatar URLs
-                                  const agentAvatars: Record<string, string> = {
-                                    "Alex": "🧑‍💼",
-                                    "Toby": "👨‍💻", 
-                                    "Riley": "✍️",
-                                    "Jamie": "🛡️",
-                                    "Dana": "⚙️"
-                                  };
-                                  const agentAvatarUrls: Record<string, string> = {
-                                    "Alex": "/avatars/alex.jpg",
-                                    "Toby": "/avatars/toby.jpg", 
-                                    "Riley": "/avatars/riley.jpg",
-                                    "Jamie": "/avatars/jamie.jpg",
-                                    "Dana": "/avatars/dana.jpg"
-                                  };
                                   return (
                                     <Avatar key={index} className="h-6 w-6 border-2 border-background">
-                                      <AvatarImage src={agentAvatarUrls[agent]} alt={agent} />
-                                      <AvatarFallback className="text-xs">{agentAvatars[agent] || agent[0]}</AvatarFallback>
+                                      <AvatarImage 
+                                        src={`https://api.dicebear.com/9.x/croodles/svg?seed=${agent.toLowerCase()}&size=100`} 
+                                        alt={agent} 
+                                      />
+                                      <AvatarFallback className="text-xs">{agent.charAt(0)}</AvatarFallback>
                                     </Avatar>
                                   );
                                 })}
