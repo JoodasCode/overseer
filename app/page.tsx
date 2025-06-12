@@ -15,7 +15,15 @@ export default function Home() {
   useEffect(() => {
     // Redirect authenticated users to the new Shadcn portal dashboard
     if (user && !loading) {
-      router.push('/dashboard')
+      console.log('🏠 Homepage: Redirecting authenticated user to dashboard:', { 
+        userId: user.id, 
+        email: user.email 
+      });
+      
+      // Use replace instead of push to avoid back button issues
+      router.replace('/dashboard');
+    } else if (!loading) {
+      console.log('🏠 Homepage: User not authenticated, showing landing page');
     }
   }, [user, loading, router])
 
@@ -53,17 +61,12 @@ export default function Home() {
                 className="text-lg px-8 py-6"
               >
                 <LogIn className="mr-2 h-5 w-5" />
-                Get Started
-              </Button>
-              <Button 
-                size="lg" 
-                variant="outline"
-                onClick={() => router.push('/auth/signin')}
-                className="text-lg px-8 py-6"
-              >
-                Sign In
+                Sign In / Sign Up
               </Button>
             </div>
+            <p className="text-sm text-muted-foreground">
+              New user? Create your account • Existing user? Sign in
+            </p>
           </div>
         </div>
 
@@ -105,7 +108,7 @@ export default function Home() {
       <ModernAuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 
-        defaultTab="signup"
+        defaultTab="signin"
       />
     </div>
   )

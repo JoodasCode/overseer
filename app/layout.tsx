@@ -2,6 +2,7 @@ import type React from "react"
 import "./globals.css"
 import type { Metadata } from "next"
 import { SupabaseAuthProvider } from "@/lib/auth/supabase-auth-provider"
+import { SessionExpiryWarning } from "@/components/auth/session-expiry-warning"
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-background font-sans antialiased">
         <SupabaseAuthProvider>
           {children}
+          <SessionExpiryWarning />
           <Toaster />
         </SupabaseAuthProvider>
       </body>

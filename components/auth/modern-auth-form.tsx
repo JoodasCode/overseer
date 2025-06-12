@@ -26,18 +26,34 @@ export function ModernAuthForm({ defaultTab = 'signin', onSuccess }: ModernAuthF
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
 
   const { signIn, signUp, signInWithGoogle, signInWithGitHub, resetPassword } = useAuth();
+
+  // Handle rate limiting feedback
+  const handleRateLimitError = (errorMessage: string) => {
+    if (errorMessage.includes('Too many authentication attempts')) {
+      setRateLimited(true);
+      // Extract retry time if available
+      const match = errorMessage.match(/(\d+) minutes/);
+      if (match) {
+        setRetryAfter(parseInt(match[1], 10));
+      }
+    }
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setRateLimited(false);
 
     const { error } = await signIn(email, password);
     
     if (error) {
       setError(error.message);
+      handleRateLimitError(error.message);
     } else {
       onSuccess?.();
       resetForm();
@@ -50,6 +66,7 @@ export function ModernAuthForm({ defaultTab = 'signin', onSuccess }: ModernAuthF
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setRateLimited(false);
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -67,6 +84,7 @@ export function ModernAuthForm({ defaultTab = 'signin', onSuccess }: ModernAuthF
     
     if (error) {
       setError(error.message);
+      handleRateLimitError(error.message);
     } else {
       setMessage('Success! Check your email for a confirmation link.');
       setEmail('');
@@ -80,25 +98,33 @@ export function ModernAuthForm({ defaultTab = 'signin', onSuccess }: ModernAuthF
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
+    setRateLimited(false);
     
     const { error } = await signInWithGoogle();
     
     if (error) {
       setError(error.message);
+      handleRateLimitError(error.message);
       setLoading(false);
     }
+    // Note: OAuth redirects to callback page, so we don't call onSuccess here
+    // The callback page handles the final redirect to dashboard
   };
 
   const handleGitHubSignIn = async () => {
     setLoading(true);
     setError(null);
+    setRateLimited(false);
     
     const { error } = await signInWithGitHub();
     
     if (error) {
       setError(error.message);
+      handleRateLimitError(error.message);
       setLoading(false);
     }
+    // Note: OAuth redirects to callback page, so we don't call onSuccess here
+    // The callback page handles the final redirect to dashboard
   };
 
   const handleResetPassword = async () => {
@@ -109,11 +135,13 @@ export function ModernAuthForm({ defaultTab = 'signin', onSuccess }: ModernAuthF
 
     setLoading(true);
     setError(null);
+    setRateLimited(false);
 
     const { error } = await resetPassword(email);
     
     if (error) {
       setError(error.message);
+      handleRateLimitError(error.message);
     } else {
       setMessage('Password reset email sent! Check your inbox.');
     }
@@ -130,6 +158,8 @@ export function ModernAuthForm({ defaultTab = 'signin', onSuccess }: ModernAuthF
     setLoading(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setRateLimited(false);
+    setRetryAfter(null);
   };
 
   const handleTabChange = (value: string) => {
@@ -155,8 +185,15 @@ export function ModernAuthForm({ defaultTab = 'signin', onSuccess }: ModernAuthF
           </TabsList>
 
           {error && (
-            <Alert className="mt-4 border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive">
-              <AlertDescription>{error}</AlertDescription>
+            <Alert className={`mt-4 ${rateLimited ? 'border-orange-500/50 text-orange-600 dark:border-orange-500 [&>svg]:text-orange-600' : 'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive'}`}>
+              <AlertDescription>
+                {error}
+                {rateLimited && retryAfter && (
+                  <div className="mt-2 text-sm">
+                    Please wait {retryAfter} minutes before trying again.
+                  </div>
+                )}
+              </AlertDescription>
             </Alert>
           )}
 

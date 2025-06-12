@@ -230,11 +230,21 @@ export function AgentChatSheet({ agent, isOpen, onClose }: AgentChatSheetProps) 
     setIsLoading(true)
 
     try {
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      
+      // Add Bearer token if available
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+      
       const response = await fetch(`/api/agents/${agent.id}/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           message: userMessage.content
         })

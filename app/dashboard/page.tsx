@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getAgentAvatarUrl } from '@/lib/dicebear-avatar'
+import { PlanUpgradeBanner } from '@/components/auth/plan-upgrade-banner'
+import { useUserPlan } from '@/hooks/use-user-plan'
 
 const agents = [
   {
@@ -83,14 +85,30 @@ const getStatusColor = (status: string) => {
 }
 
 export default function DashboardPage() {
+  const { plan, loading: planLoading } = useUserPlan()
   const activeAgents = agents.filter(agent => agent.status === "Active").length
   const totalTasks = agents.reduce((sum, agent) => sum + agent.tasks, 0)
   const avgPerformance = Math.round(agents.reduce((sum, agent) => sum + agent.performance, 0) / agents.length)
   const errorRate = Math.round((agents.filter(agent => agent.status === "Error").length / agents.length) * 100)
 
+  const handleUpgrade = (newPlan: string) => {
+    console.log('🚀 Upgrading to plan:', newPlan)
+    // TODO: Implement actual upgrade logic
+  }
+
   return (
     <SharedLayout title="Overseer Dashboard" description="Here's a snapshot of your AI operations today.">
       <div className="space-y-6">
+        {/* Plan Upgrade Banner */}
+        {!planLoading && plan && (
+          <PlanUpgradeBanner
+            currentPlan={plan.subscription_plan}
+            tokensUsed={plan.tokens_used}
+            tokenQuota={plan.token_quota}
+            onUpgrade={handleUpgrade}
+          />
+        )}
+
         {/* Welcome Section */}
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Welcome back, John</h2>

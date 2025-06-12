@@ -136,9 +136,9 @@ export default function WorkflowBuilderPage() {
           <Card className="border-pixel">
             <CardContent className="p-8 text-center">
               <AlertCircle className="w-8 h-8 mx-auto mb-4 text-yellow-500" />
-              <h3 className="font-pixel text-sm mb-2">No Agents Available</h3>
+              <h3 className="font-pixel text-sm mb-2">No Agents Found</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                You need to hire at least one agent before creating workflows.
+                Unable to load agents. Please check your connection and try again.
               </p>
               <a 
                 href="/agents" 

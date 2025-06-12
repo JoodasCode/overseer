@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { config } from '@/lib/config'
+import { createClient } from '@supabase/supabase-js'
 import { SupabaseKnowledgeRetriever } from '@/lib/knowledge-base/supabase-knowledge-retriever'
+import { config } from '@/lib/config'
 
 // Agent personas for consistent responses
 const AGENT_PERSONAS = {
@@ -45,7 +45,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient()
     const agentId = (await params).id
     const { message } = await request.json()
 
@@ -56,8 +55,25 @@ export async function POST(
       )
     }
 
-    // 🔐 STEP 1: AUTHENTICATE USER
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // 🔐 STEP 1: AUTHENTICATE USER VIA BEARER TOKEN
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      console.log('❌ Chat API: No Bearer token provided')
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const token = authHeader.substring(7)
+    
+    // Create Supabase client with the user's token
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     console.log('🔍 DEBUG: Chat API authentication:', {
       hasUser: !!user,
@@ -67,7 +83,7 @@ export async function POST(
     })
 
     if (!user) {
-      console.log('❌ Chat API: Authentication failed:', authError?.message || 'Auth session missing!')
+      console.log('❌ Chat API: Authentication failed:', authError?.message || 'Invalid token!')
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
@@ -80,16 +96,28 @@ export async function POST(
       agentId
     })
 
+    // Create authenticated Supabase client for database operations
+    const authenticatedSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
+
     // 🎯 STEP 2: GET AGENT (NO OWNERSHIP CHECK - ALL AGENTS ACCESSIBLE)
-    const { data: agent, error: agentError } = await supabase
+    const { data: agent, error: agentError } = await authenticatedSupabase
       .from('portal_agents')
       .select('*')
       .eq('id', agentId)
-      .eq('status', 'active')
       .single()
 
     if (agentError || !agent) {
-      console.log('❌ Chat API: Agent not found or not active:', agentError?.message)
+      console.log('❌ Chat API: Agent not found:', agentError?.message)
       return NextResponse.json(
         { error: 'Agent not found or not available' },
         { status: 404 }
@@ -99,7 +127,7 @@ export async function POST(
     console.log('✅ Chat API: Agent accessible to all users:', { agentName: agent.name, agentRole: agent.role })
 
     // 🎯 STEP 3: TOKEN QUOTA CHECK
-    const { data: tokenUsage } = await supabase
+    const { data: tokenUsage } = await authenticatedSupabase
       .from('user_tokens')
       .select('tokens_used, token_quota')
       .eq('user_id', user.id)
@@ -107,7 +135,7 @@ export async function POST(
 
     // Initialize tokens if user doesn't have a record
     if (!tokenUsage) {
-      await supabase
+      await authenticatedSupabase
         .from('user_tokens')
         .insert({
           user_id: user.id,
@@ -136,7 +164,7 @@ export async function POST(
     }
 
     // 🎯 STEP 4: GET CONVERSATION HISTORY
-    const { data: messages } = await supabase
+    const { data: messages } = await authenticatedSupabase
       .from('portal_agent_logs')
       .select('role, content')
       .eq('user_id', user.id)
@@ -147,7 +175,7 @@ export async function POST(
     // 💾 STEP 5: SAVE USER MESSAGE FIRST
     const conversationId = crypto.randomUUID()
     
-    const { error: saveUserError } = await supabase
+    const { error: saveUserError } = await authenticatedSupabase
       .from('portal_agent_logs')
       .insert({
         user_id: user.id,
@@ -241,20 +269,20 @@ export async function POST(
 
     // 🎯 STEP 7: CONSUME TOKENS BEFORE SAVING RESPONSE
     // Try to use the function, fall back to direct update if not available
-    const tokenResult = await supabase.rpc('consume_tokens', {
+    const tokenResult = await authenticatedSupabase.rpc('consume_tokens', {
       p_user_id: user.id,
       p_agent_id: agentId,
-      p_tokens: 1,
       p_conversation_id: conversationId,
       p_message_content: message,
-      p_openai_tokens: openaiTokensUsed
+      p_openai_tokens: openaiTokensUsed,
+      p_tokens: 1
     })
 
     if (tokenResult.error) {
       console.log('📝 Function not available, using direct token update:', tokenResult.error.message)
       
       // Fallback to direct token update
-      const { error: updateError } = await supabase
+      const { error: updateError } = await authenticatedSupabase
         .from('user_tokens')
         .update({ 
           tokens_used: currentUsage + 1,
@@ -267,7 +295,7 @@ export async function POST(
       }
 
       // Also log the usage in usage_logs table
-      await supabase
+      await authenticatedSupabase
         .from('usage_logs')
         .insert({
           user_id: user.id,
@@ -280,7 +308,7 @@ export async function POST(
     }
 
     // 💾 STEP 8: SAVE ASSISTANT RESPONSE
-    const { error: saveAssistantError } = await supabase
+    const { error: saveAssistantError } = await authenticatedSupabase
       .from('portal_agent_logs')
       .insert({
         user_id: user.id,

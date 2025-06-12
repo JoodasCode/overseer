@@ -258,13 +258,13 @@ export default function SettingsPage() {
                     </div>
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
                       <div className="text-2xl font-bold">
-                        {analytics?.averagePerDay.toFixed(1) || '0'}
+                        {analytics?.averagePerDay ? analytics.averagePerDay.toFixed(1) : '0.0'}
                       </div>
                       <div className="text-xs text-muted-foreground">Daily Avg</div>
                     </div>
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
                       <div className="text-2xl font-bold">
-                        {Math.ceil(tokenUsage.tokensRemaining / (analytics?.averagePerDay || 1))}
+                        {analytics?.averagePerDay && analytics.averagePerDay > 0 ? Math.ceil(tokenUsage.tokensRemaining / analytics.averagePerDay) : '—'}
                       </div>
                       <div className="text-xs text-muted-foreground">Days Left</div>
                     </div>
@@ -295,7 +295,7 @@ export default function SettingsPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <TrendingUp className="h-4 w-4" />
-                      Usage Trends
+                      Usage Insights
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -410,11 +410,11 @@ export default function SettingsPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">
-                        {new Date(new Date(tokenUsage.lastReset).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                        {tokenUsage?.lastReset ? new Date(new Date(tokenUsage.lastReset).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString() : '—'}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         <Clock className="h-3 w-3 inline mr-1" />
-                        {Math.ceil((new Date(new Date(tokenUsage.lastReset).getTime() + 30 * 24 * 60 * 60 * 1000).getTime() - Date.now()) / (24 * 60 * 60 * 1000))} days
+                        {tokenUsage?.lastReset ? Math.ceil((new Date(new Date(tokenUsage.lastReset).getTime() + 30 * 24 * 60 * 60 * 1000).getTime() - Date.now()) / (24 * 60 * 60 * 1000)) : '—'} days
                       </p>
                     </div>
                   </div>

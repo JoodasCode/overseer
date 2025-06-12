@@ -163,10 +163,9 @@ export default function IntegrationsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Integration
-          </Button>
+          <div className="text-sm text-muted-foreground">
+            Available Integrations
+          </div>
         </div>
 
         {/* Integrations Grid */}

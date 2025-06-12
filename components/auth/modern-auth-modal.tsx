@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ModernAuthForm } from './modern-auth-form';
 
@@ -10,9 +11,13 @@ interface ModernAuthModalProps {
 }
 
 export function ModernAuthModal({ isOpen, onClose, defaultTab = 'signin' }: ModernAuthModalProps) {
+  const router = useRouter();
+
   const handleAuthSuccess = () => {
+    console.log('🎉 Auth modal: Sign-in successful, redirecting to dashboard');
     onClose();
-    // The ModernAuthForm handles navigation to dashboard
+    // Explicitly redirect to dashboard
+    router.push('/dashboard');
   };
 
   return (

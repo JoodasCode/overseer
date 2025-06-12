@@ -3,74 +3,81 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { LogOut } from 'lucide-react'
-import { supabase, clearAllAuthCookies } from '@/lib/supabase/client'
+import { useAuth } from '@/lib/auth/supabase-auth-provider'
+import { supabase, clearAuthData } from '@/lib/supabase/client'
+import { LogOut, Loader2 } from 'lucide-react'
 
-export function LogoutButton({ variant = 'ghost', size = 'sm' }: {
-  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
-  size?: 'default' | 'sm' | 'lg' | 'icon'
-}) {
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
+export function LogoutButton() {
+  const { signOut } = useAuth()
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSecureLogout = async () => {
+  const handleLogout = async () => {
+    setIsLoading(true)
+    
     try {
-      setIsLoggingOut(true)
-      console.log('🔒 SECURITY: Starting secure logout process...')
-
-      // Step 1: Clear all authentication cookies immediately
-      console.log('🔒 Step 1: Clearing all auth cookies')
-      clearAllAuthCookies()
-
-      // Step 2: Sign out from Supabase (server-side session termination)
-      console.log('🔒 Step 2: Terminating Supabase session')
-      const { error } = await supabase.auth.signOut({
-        scope: 'global' // Sign out from all sessions
-      })
-
+      // Clear local auth data first
+      clearAuthData()
+      
+      // Sign out through Supabase
+      const { error } = await signOut()
+      
       if (error) {
-        console.error('❌ Supabase logout error:', error)
-        // Continue with cleanup even if server logout fails
+        console.error('Logout error:', error)
+        // Even if there's an error, we cleared local data, so redirect anyway
       }
-
-      // Step 3: Clear any remaining client-side data
-      console.log('🔒 Step 3: Final cleanup')
       
-      // Clear any cached user data
-      if (typeof window !== 'undefined') {
-        // Clear any cached state in memory
-        window.location.href = '/auth/signin?logged_out=true'
-      } else {
-        router.replace('/auth/signin?logged_out=true')
-      }
-
-      console.log('✅ SECURITY: Secure logout completed')
-
+      // Redirect to sign-in page with logout confirmation
+      router.push('/auth/signin?logged_out=true')
+      
     } catch (error) {
-      console.error('❌ CRITICAL: Logout error:', error)
+      console.error('Logout failed:', error)
       
-      // Emergency cleanup - force clear everything
-      clearAllAuthCookies()
+      // Clear auth data even on error and redirect
+      clearAuthData()
+      router.push('/auth/signin?logged_out=true')
       
-      // Force redirect even on error
-      if (typeof window !== 'undefined') {
-        window.location.href = '/auth/signin?error=logout_failed'
-      }
     } finally {
-      setIsLoggingOut(false)
+      setIsLoading(false)
+    }
+  }
+
+  const handleQuickClear = async () => {
+    setIsLoading(true)
+    
+    try {
+      // Emergency clear - just clear everything and redirect
+      clearAuthData()
+      
+      // Try to sign out but don't wait for response
+      signOut().catch(() => {}) // Fire and forget
+      
+      // Immediate redirect
+      router.push('/auth/signin?logged_out=true')
+      
+    } catch (error) {
+      console.error('Quick clear failed:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <Button
-      variant={variant}
-      size={size}
-      onClick={handleSecureLogout}
-      disabled={isLoggingOut}
-      className="flex items-center gap-2"
-    >
-      <LogOut className="w-4 h-4" />
-      {isLoggingOut ? 'Logging out...' : 'Logout'}
-    </Button>
+    <div className="flex gap-2">
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={handleLogout}
+        disabled={isLoading}
+        className="flex items-center gap-2"
+      >
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <LogOut className="h-4 w-4" />
+        )}
+        Sign Out
+      </Button>
+    </div>
   )
 } 

@@ -28,6 +28,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Agent } from '@/lib/types'
 import { ShadcnChatTrigger } from '@/components/chat/ShadcnChatTrigger'
 import { LogoutButton } from '@/components/auth/logout-button'
+import { TokenUsageBar } from '@/components/token-usage-bar'
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -380,6 +381,8 @@ export function SharedLayout({ children, title, description }: SharedLayoutProps
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
+
+                <TokenUsageBar />
               </div>
             </div>
           </header>
