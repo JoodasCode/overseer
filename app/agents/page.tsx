@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -22,21 +24,30 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { 
-  Plus, 
   Search, 
   MoreVertical, 
   Edit, 
-  Trash2, 
   MessageCircle, 
   Users, 
   Activity, 
   Zap, 
   Star,
-  Brain
+  Brain,
+  Coins,
+  AlertTriangle,
+  Info,
+  Target,
+  Palette,
+  BarChart3,
+  Headphones,
+  Settings,
+  ArrowRight,
+  Lightbulb
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 import { AgentChatSheet } from '@/components/chat/AgentChatSheet'
+import { useRouter } from 'next/navigation'
 
 interface Agent {
   id: string
@@ -47,6 +58,9 @@ interface Agent {
   status: 'active' | 'idle' | 'offline' | 'collaborating'
   personality: string
   tools: string[]
+  memory_map?: any
+  department_type?: string
+  is_system_agent?: boolean
   stats: {
     total_tasks_completed?: number
     efficiency_score?: number
@@ -56,8 +70,95 @@ interface Agent {
   updated_at: string
 }
 
+interface TokenUsage {
+  tokens_used: number
+  token_quota: number
+  tokens_remaining: number
+  subscription_plan: string
+  reset_period: string
+  last_reset: string
+}
+
+// 🎯 Strategic Agent System - Enhanced UI Data
+const AGENT_ENHANCEMENTS: Record<string, {
+  icon: any
+  color: string
+  solo_value: string
+  synergy_partners: string[]
+  example_prompts: string[]
+  department_color: string
+  tools_display: string[]
+}> = {
+  'Alex': {
+    icon: Target,
+    color: 'text-purple-600',
+    department_color: 'bg-purple-100 text-purple-800 border-purple-200',
+    solo_value: 'Transforms vague ideas into clear, structured plans',
+    synergy_partners: ['Dana', 'Riley', 'Jamie', 'Toby'],
+    example_prompts: [
+      'Turn this idea into a 4-week launch plan',
+      'Create a project roadmap with milestones',
+      'Map team dependencies for this initiative'
+    ],
+    tools_display: ['Project Planning', 'OKR Creation', 'Timeline Management']
+  },
+  'Dana': {
+    icon: Palette,
+    color: 'text-pink-600',
+    department_color: 'bg-pink-100 text-pink-800 border-pink-200',
+    solo_value: 'Generates compelling copy and creative direction instantly',
+    synergy_partners: ['Alex', 'Riley', 'Jamie', 'Toby'],
+    example_prompts: [
+      'Write 3 ad headline options for this launch',
+      'Create a social media campaign strategy',
+      'Design visual direction for this brand'
+    ],
+    tools_display: ['Copywriting', 'Brand Messaging', 'Content Creation']
+  },
+  'Jamie': {
+    icon: Settings,
+    color: 'text-blue-600',
+    department_color: 'bg-blue-100 text-blue-800 border-blue-200',
+    solo_value: 'Keeps everything aligned and moving internally',
+    synergy_partners: ['Alex', 'Dana', 'Riley', 'Toby'],
+    example_prompts: [
+      'Organize this project thread into action items',
+      'Create a team communication plan',
+      'Track progress across these initiatives'
+    ],
+    tools_display: ['Task Management', 'Team Communication', 'Progress Tracking']
+  },
+  'Riley': {
+    icon: BarChart3,
+    color: 'text-green-600',
+    department_color: 'bg-green-100 text-green-800 border-green-200',
+    solo_value: 'Turns raw data into smart, actionable insights',
+    synergy_partners: ['Alex', 'Dana', 'Jamie', 'Toby'],
+    example_prompts: [
+      'Analyze this performance report',
+      'What do these metrics tell us?',
+      'Find growth opportunities in this data'
+    ],
+    tools_display: ['Data Analysis', 'Performance Metrics', 'Trend Analysis']
+  },
+  'Toby': {
+    icon: Headphones,
+    color: 'text-orange-600',
+    department_color: 'bg-orange-100 text-orange-800 border-orange-200',
+    solo_value: 'Complex technical info into clear user guidance',
+    synergy_partners: ['Alex', 'Dana', 'Riley', 'Jamie'],
+    example_prompts: [
+      'Write an onboarding FAQ for this feature',
+      'Create support templates for billing issues',
+      'Simplify this technical documentation'
+    ],
+    tools_display: ['Technical Writing', 'Customer Support', 'User Documentation']
+  }
+}
+
 export default function AgentsPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -65,156 +166,102 @@ export default function AgentsPage() {
   const [roleFilter, setRoleFilter] = useState('all')
   const [chatAgent, setChatAgent] = useState<Agent | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null)
 
-  const supabase = createClient()
-
-  // Load agents from database
+  // Load agents and token usage from database
   useEffect(() => {
     loadAgents()
+    loadTokenUsage()
   }, [])
 
   const loadAgents = async () => {
     try {
+      // Load ALL agents (system + user agents)
       const { data, error } = await supabase
-        .from('agents')
+        .from('portal_agents')
         .select('*')
+        .eq('status', 'active')
+        .order('is_system_agent', { ascending: false }) // System agents first
         .order('created_at', { ascending: false })
 
       if (error) {
         console.error('Error loading agents:', error)
-        // Use mock data as fallback
-        loadMockAgents()
+        setAgents([])
         return
       }
 
       if (data && data.length > 0) {
-        setAgents(data)
+        // Transform database agents to match our interface
+        const transformedAgents = data.map((agent: any) => ({
+          id: agent.id,
+          name: agent.name,
+          role: agent.role || 'AI Assistant',
+          description: agent.description || 'An intelligent AI assistant',
+          avatar_url: agent.avatar_url || `https://api.dicebear.com/9.x/croodles/svg?seed=default&backgroundColor=6b7280`,
+          status: agent.status as 'active' | 'idle' | 'offline' | 'collaborating',
+          personality: agent.persona || 'Helpful and professional assistant',
+          tools: Array.isArray(agent.tools) ? agent.tools : ['General Assistance'],
+          memory_map: agent.memory_map || {},
+          department_type: agent.department_type,
+          is_system_agent: agent.is_system_agent || false,
+          stats: {
+            total_tasks_completed: agent.level_xp || 0,
+            efficiency_score: agent.efficiency_score || 100,
+            last_active: agent.last_active || agent.updated_at
+          },
+          created_at: agent.created_at,
+          updated_at: agent.updated_at
+        }))
+        setAgents(transformedAgents)
       } else {
-        // No agents found, use mock data
-        loadMockAgents()
+        setAgents([])
       }
     } catch (error) {
       console.error('Database error:', error)
-      // Use mock data as fallback
-      loadMockAgents()
+      setAgents([])
     } finally {
       setLoading(false)
     }
   }
 
-  const loadMockAgents = () => {
-    const mockAgents: Agent[] = [
-      {
-        id: '1',
-        name: 'Alex',
-        role: 'Strategic Coordinator',
-        description: 'Develops strategic plans and coordinates complex projects with systematic precision.',
-        avatar_url: `https://api.dicebear.com/9.x/croodles/svg?seed=alex&size=100`,
-        status: 'active',
-        personality: 'Strategic, methodical, and analytical. Alex approaches challenges with a systematic mindset.',
-        tools: ['Strategy Planning', 'Project Coordination', 'Analytics'],
-        stats: {
-          total_tasks_completed: 156,
-          efficiency_score: 94,
-          last_active: new Date().toISOString()
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: '2',
-        name: 'Dana',
-        role: 'Creative Assistant',
-        description: 'Brings creative flair to projects with innovative solutions and artistic vision.',
-        avatar_url: `https://api.dicebear.com/9.x/croodles/svg?seed=dana&size=100`,
-        status: 'active',
-        personality: 'Creative, intuitive, and expressive. Dana excels at thinking outside the box.',
-        tools: ['Creative Design', 'Content Creation', 'Innovation'],
-        stats: {
-          total_tasks_completed: 189,
-          efficiency_score: 91,
-          last_active: new Date().toISOString()
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: '3',
-        name: 'Jamie',
-        role: 'Team Coordinator',
-        description: 'Facilitates smooth team operations and ensures seamless communication across all projects.',
-        avatar_url: `https://api.dicebear.com/9.x/croodles/svg?seed=jamie&size=100`,
-        status: 'collaborating',
-        personality: 'Collaborative, organized, and diplomatic. Jamie ensures everyone works together effectively.',
-        tools: ['Team Management', 'Communication', 'Workflow Optimization'],
-        stats: {
-          total_tasks_completed: 203,
-          efficiency_score: 96,
-          last_active: new Date().toISOString()
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: '4',
-        name: 'Riley',
-        role: 'Data Analyst',
-        description: 'Transforms complex data into actionable insights with precision and clarity.',
-        avatar_url: `https://api.dicebear.com/9.x/croodles/svg?seed=riley&size=100`,
-        status: 'idle',
-        personality: 'Analytical, detail-oriented, and logical. Riley finds patterns others miss.',
-        tools: ['Data Analysis', 'Reporting', 'Statistical Modeling'],
-        stats: {
-          total_tasks_completed: 134,
-          efficiency_score: 89,
-          last_active: new Date().toISOString()
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: '5',
-        name: 'Toby',
-        role: 'Support Specialist',
-        description: 'Provides rapid response support and maintains system reliability around the clock.',
-        avatar_url: `https://api.dicebear.com/9.x/croodles/svg?seed=toby&size=100`,
-        status: 'active',
-        personality: 'Quick, responsive, and action-oriented. Toby thrives under pressure.',
-        tools: ['Rapid Response', 'Support Coordination', 'Crisis Management'],
-        stats: {
-          total_tasks_completed: 112,
-          efficiency_score: 88,
-          last_active: new Date().toISOString()
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+  const loadTokenUsage = async () => {
+    try {
+      const response = await fetch('/api/tokens/usage')
+      if (response.ok) {
+        const usage = await response.json()
+        setTokenUsage(usage)
       }
-    ]
-    setAgents(mockAgents)
-  }
-
-  const handleAgentHired = () => {
-    toast({
-      title: "Feature Coming Soon",
-      description: "Agent hiring will be available in the next update."
-    })
+    } catch (error) {
+      console.error('Error loading token usage:', error)
+    }
   }
 
   const handleEditAgent = (agent: Agent) => {
+    if (agent.is_system_agent) {
+      toast({
+        title: "System Agent",
+        description: "System agents can't be edited, but you can create your own custom agents.",
+      })
+      return
+    }
+    
     toast({
       title: "Feature Coming Soon", 
       description: "Agent editing will be available in the next update."
     })
   }
 
-  const handleDeleteAgent = async (agent: Agent) => {
-    toast({
-      title: "Feature Coming Soon",
-      description: "Agent deletion will be available in the next update."
-    })
-  }
-
   const handleChatWithAgent = (agent: Agent) => {
+    // Check tokens before opening chat
+    if (tokenUsage && tokenUsage.tokens_remaining <= 0) {
+      toast({
+        title: "Token Quota Exceeded",
+        description: `You've used all ${tokenUsage.token_quota} tokens for this month. Upgrade your plan to continue chatting.`,
+        variant: "destructive"
+      })
+      return
+    }
+
     setChatAgent(agent)
     setIsChatOpen(true)
   }
@@ -222,6 +269,8 @@ export default function AgentsPage() {
   const handleCloseChatSheet = () => {
     setIsChatOpen(false)
     setChatAgent(null)
+    // Refresh token usage after chat
+    loadTokenUsage()
   }
 
   const getStatusColor = (status: string) => {
@@ -247,27 +296,240 @@ export default function AgentsPage() {
   const filteredAgents = agents.filter(agent => {
     const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          agent.role.toLowerCase().includes(searchQuery.toLowerCase())
-    
     const matchesStatus = statusFilter === 'all' || agent.status === statusFilter
     const matchesRole = roleFilter === 'all' || agent.role.toLowerCase().includes(roleFilter.toLowerCase())
-    
     return matchesSearch && matchesStatus && matchesRole
   })
 
-  const totalAgents = agents.length
-  const activeAgents = agents.filter(agent => agent.status === 'active').length
-  const totalTasks = agents.reduce((sum, agent) => sum + (agent.stats.total_tasks_completed || 0), 0)
-  const avgEfficiency = totalAgents > 0 
-    ? Math.round(agents.reduce((sum, agent) => sum + (agent.stats.efficiency_score || 0), 0) / totalAgents)
-    : 0
+  // 🎯 Token Usage Component
+  const TokenUsageCard = () => {
+    if (!tokenUsage) return null
+
+    const usagePercentage = (tokenUsage.tokens_used / tokenUsage.token_quota) * 100
+    const isLow = tokenUsage.tokens_remaining < 50
+    const isExhausted = tokenUsage.tokens_remaining <= 0
+
+    return (
+      <Card className={`mb-6 ${isExhausted ? 'border-red-200 bg-red-50/50' : isLow ? 'border-yellow-200 bg-yellow-50/50' : ''}`}>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Coins className="h-5 w-5 text-blue-600" />
+              <div>
+                <h3 className="font-semibold text-gray-900">Token Usage</h3>
+                <p className="text-sm text-gray-600">
+                  {tokenUsage.tokens_used} / {tokenUsage.token_quota} tokens used
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <Badge variant="outline" className="mb-1">
+                {tokenUsage.subscription_plan}
+              </Badge>
+              <p className="text-sm text-gray-500">
+                {tokenUsage.tokens_remaining} remaining
+              </p>
+            </div>
+          </div>
+          
+          <Progress value={usagePercentage} className="mb-3" />
+          
+          {isExhausted && (
+            <div className="flex items-center gap-2 text-red-600 text-sm">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Token quota exceeded. Upgrade to continue chatting.</span>
+              <Button 
+                size="sm" 
+                variant="destructive"
+                onClick={() => router.push('/settings?tab=billing')}
+                className="ml-auto"
+              >
+                Upgrade Plan
+              </Button>
+            </div>
+          )}
+          
+          {isLow && !isExhausted && (
+            <div className="flex items-center gap-2 text-yellow-700 text-sm">
+              <Info className="h-4 w-4" />
+              <span>Running low on tokens. Consider upgrading your plan.</span>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => router.push('/settings?tab=billing')}
+                className="ml-auto"
+              >
+                View Plans
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // 🎯 Enhanced Agent Card Component
+  const EnhancedAgentCard = ({ agent }: { agent: Agent }) => {
+    const enhancement = AGENT_ENHANCEMENTS[agent.name]
+    const IconComponent = enhancement?.icon || Brain
+    const canChat = !tokenUsage || tokenUsage.tokens_remaining > 0
+
+    return (
+      <Card className={`transition-all duration-200 hover:shadow-lg ${!canChat ? 'opacity-60' : ''} ${agent.is_system_agent ? 'ring-1 ring-blue-200' : ''}`}>
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src={agent.avatar_url} alt={agent.name} />
+                  <AvatarFallback className={enhancement?.color || 'text-gray-600'}>
+                    <IconComponent className="h-6 w-6" />
+                  </AvatarFallback>
+                </Avatar>
+                {agent.is_system_agent && (
+                  <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center">
+                    <Star className="h-2.5 w-2.5 text-white" />
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">{agent.name}</CardTitle>
+                  <Badge className={`text-xs px-2 py-1 ${getStatusColor(agent.status)}`}>
+                    {getStatusIcon(agent.status)} {agent.status}
+                  </Badge>
+                </div>
+                <CardDescription className="text-sm mt-1">
+                  {agent.role}
+                </CardDescription>
+              </div>
+            </div>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleChatWithAgent(agent)} disabled={!canChat}>
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Start Chat
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleEditAgent(agent)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  {agent.is_system_agent ? 'View Details' : 'Edit Agent'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          {/* Department Badge */}
+          {agent.department_type && enhancement && (
+            <Badge className={`${enhancement.department_color} text-xs`}>
+              {agent.department_type.charAt(0).toUpperCase() + agent.department_type.slice(1)} Specialist
+            </Badge>
+          )}
+
+          {/* Solo Value Proposition */}
+          {enhancement && (
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-sm font-medium text-gray-900 mb-1">🎯 Solo Value:</p>
+              <p className="text-sm text-gray-600">{enhancement.solo_value}</p>
+            </div>
+          )}
+
+          {/* Core Tools */}
+          <div>
+            <p className="text-sm font-medium text-gray-900 mb-2">🔧 Core Tools:</p>
+            <div className="flex flex-wrap gap-1">
+              {(enhancement?.tools_display || agent.tools.slice(0, 3)).map((tool, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {tool}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Synergy Partners */}
+          {enhancement && enhancement.synergy_partners.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-900 mb-2">🤝 Works Great With:</p>
+              <div className="flex flex-wrap gap-1">
+                {enhancement.synergy_partners.slice(0, 3).map((partner, index) => (
+                  <Badge key={index} variant="outline" className="text-xs">
+                    {partner}
+                  </Badge>
+                ))}
+                {enhancement.synergy_partners.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{enhancement.synergy_partners.length - 3} more
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Example Prompts */}
+          {enhancement && enhancement.example_prompts.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-900 mb-2">💬 Try These:</p>
+              <div className="space-y-1">
+                {enhancement.example_prompts.slice(0, 2).map((prompt, index) => (
+                  <button
+                    key={index}
+                    onClick={() => canChat && handleChatWithAgent(agent)}
+                    disabled={!canChat}
+                    className="w-full text-left p-2 text-xs bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between group"
+                  >
+                    <span className="text-blue-700">"{prompt}"</span>
+                    <ArrowRight className="h-3 w-3 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => handleChatWithAgent(agent)} 
+              className="flex-1"
+              disabled={!canChat}
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              {!canChat ? 'No Tokens' : 'Start Chat'}
+            </Button>
+            {!agent.is_system_agent && (
+              <Button variant="outline" size="sm" onClick={() => handleEditAgent(agent)}>
+                <Edit className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+
+          {/* Token Cost */}
+          <div className="text-center">
+            <Badge variant="outline" className="text-xs">
+              <Coins className="h-3 w-3 mr-1" />
+              1 token per chat
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   if (loading) {
     return (
-      <SharedLayout title="Your Agents" description="Manage your AI agent team">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p>Loading agents...</p>
+      <SharedLayout>
+        <div className="container mx-auto p-6">
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading your agent team...</p>
           </div>
         </div>
       </SharedLayout>
@@ -275,70 +537,61 @@ export default function AgentsPage() {
   }
 
   return (
-    <SharedLayout title="Your Agents" description="Manage your AI agent team">
-      <div className="space-y-6">
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalAgents}</div>
-              <p className="text-xs text-muted-foreground">In your team</p>
-            </CardContent>
-          </Card>
+    <SharedLayout>
+      <div className="container mx-auto p-6">
+        <div className="mb-8">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Strategic Agent Team</h1>
+              <p className="text-gray-600 max-w-2xl">
+                Meet your specialized AI agents. Each one delivers standalone value, but they're even more powerful when working together. 
+                Choose the right specialist for your task or let them collaborate on complex projects.
+              </p>
+            </div>
+            <Button onClick={() => router.push('/agents/create')} className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Create Agent
+            </Button>
+          </div>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Agents</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{activeAgents}</div>
-              <p className="text-xs text-muted-foreground">Currently working</p>
-            </CardContent>
-          </Card>
+          {/* Token Usage Display */}
+          <TokenUsageCard />
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
-              <Zap className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalTasks}</div>
-              <p className="text-xs text-muted-foreground">Completed</p>
-            </CardContent>
-          </Card>
+          {/* Multi-Agent Info Card */}
+          {agents.filter(a => a.is_system_agent).length >= 2 && (
+            <Card className="mb-6 bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <Lightbulb className="h-5 w-5 text-blue-600" />
+                  <h3 className="font-semibold text-gray-900">💡 Pro Tip: Multi-Agent Workflows</h3>
+                </div>
+                <p className="text-sm text-gray-700 mb-3">
+                  Try: <em>"Plan and execute a product launch"</em> to see Alex coordinate Dana (creative), 
+                  Riley (data), Jamie (operations), and Toby (support) automatically.
+                </p>
+                <Button variant="outline" size="sm" className="text-blue-700 border-blue-300">
+                  Learn About Agent Collaboration →
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Efficiency</CardTitle>
-              <Star className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{avgEfficiency}%</div>
-              <p className="text-xs text-muted-foreground">Team performance</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters and Actions */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-1 items-center gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search agents..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+          {/* Search and Filters */}
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search agents by name or role..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="All Status" />
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
@@ -349,144 +602,53 @@ export default function AgentsPage() {
               </SelectContent>
             </Select>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="All Roles" />
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
                 <SelectItem value="coordinator">Coordinator</SelectItem>
-                <SelectItem value="assistant">Assistant</SelectItem>
+                <SelectItem value="creative">Creative</SelectItem>
                 <SelectItem value="analyst">Analyst</SelectItem>
                 <SelectItem value="specialist">Specialist</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          
-          <Button onClick={handleAgentHired}>
-            <Plus className="h-4 w-4 mr-2" />
-            Hire Agent
-          </Button>
         </div>
 
         {/* Agents Grid */}
         {filteredAgents.length === 0 ? (
-          <Card className="p-8 text-center">
-            <div className="space-y-3">
-              <Brain className="h-12 w-12 mx-auto text-muted-foreground" />
-              <h3 className="text-lg font-medium">
-                {agents.length === 0 ? "No agents hired yet" : "No agents match your filters"}
-              </h3>
-              <p className="text-muted-foreground">
-                {agents.length === 0 
-                  ? "Start building your AI team by hiring your first agent."
-                  : "Try adjusting your search or filter criteria."
-                }
-              </p>
-              {agents.length === 0 && (
-                <Button onClick={handleAgentHired}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Hire Your First Agent
-                </Button>
-              )}
-            </div>
-          </Card>
+          <div className="text-center py-12">
+            <Brain className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Agents Found</h3>
+            <p className="text-gray-600 mb-6">
+              {searchQuery || statusFilter !== 'all' || roleFilter !== 'all' 
+                ? "Try adjusting your search or filters."
+                : "Create your first AI agent to get started."}
+            </p>
+            {!searchQuery && statusFilter === 'all' && roleFilter === 'all' && (
+              <Button onClick={() => router.push('/agents/create')}>
+                Create Your First Agent
+              </Button>
+            )}
+          </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAgents.map((agent) => (
-              <Card key={agent.id} className="relative group hover:shadow-lg transition-all duration-200">
-                <CardHeader className="pb-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src={agent.avatar_url} alt={agent.name} />
-                        <AvatarFallback>{agent.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle className="text-lg">{agent.name}</CardTitle>
-                        <CardDescription className="text-sm">{agent.role}</CardDescription>
-                      </div>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleChatWithAgent(agent)}>
-                          <MessageCircle className="h-4 w-4 mr-2" />
-                          Chat
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleEditAgent(agent)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => handleDeleteAgent(agent)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 mt-3">
-                    <Badge variant="outline" className={getStatusColor(agent.status)}>
-                      <span className="mr-1">{getStatusIcon(agent.status)}</span>
-                      {agent.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {agent.description}
-                  </p>
-                  
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Tasks Completed</span>
-                      <span className="font-medium">{agent.stats.total_tasks_completed || 0}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Efficiency Score</span>
-                      <span className="font-medium">{agent.stats.efficiency_score || 0}%</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 mt-4">
-                    <Button 
-                      size="sm" 
-                      className="flex-1"
-                      onClick={() => handleChatWithAgent(agent)}
-                    >
-                      <MessageCircle className="h-4 w-4 mr-2" />
-                      Chat
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => handleEditAgent(agent)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <EnhancedAgentCard key={agent.id} agent={agent} />
             ))}
           </div>
         )}
-      </div>
 
-      {/* Chat Sheet */}
-      <AgentChatSheet
-        agent={chatAgent}
-        isOpen={isChatOpen}
-        onClose={handleCloseChatSheet}
-      />
+        {/* Agent Chat Sheet */}
+        {chatAgent && (
+          <AgentChatSheet 
+            agent={chatAgent}
+            isOpen={isChatOpen}
+            onClose={handleCloseChatSheet}
+          />
+        )}
+      </div>
     </SharedLayout>
   )
 }

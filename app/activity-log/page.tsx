@@ -18,7 +18,7 @@ const activities = [
     description: "Strategic quarterly planning completed successfully",
     agent: "Alex",
     avatar: "🧑‍💼",
-    avatarUrl: "/avatars/alex.jpg",
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=alex&backgroundColor=8b5cf6",
     timestamp: "2024-01-15T14:30:00Z",
     status: "success",
     details: "Strategic Coordinator Alex finished quarterly planning analysis on schedule"
@@ -30,7 +30,7 @@ const activities = [
     description: "Dana began working on visual content for campaign",
     agent: "Dana",
     avatar: "⚙️",
-    avatarUrl: "/avatars/dana.jpg",
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=dana&backgroundColor=ec4899",
     timestamp: "2024-01-15T13:45:00Z",
     status: "info",
     details: "Visual Assistant started design work for Q1 campaign materials"
@@ -42,7 +42,7 @@ const activities = [
     description: "Data integration setup encountered errors",
     agent: "Riley",
     avatar: "✍️",
-    avatarUrl: "/avatars/riley.jpg",
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=riley&backgroundColor=10b981",
     timestamp: "2024-01-15T12:20:00Z",
     status: "error",
     details: "Data Analyst Riley encountered connection timeout during analytics setup"
@@ -54,7 +54,7 @@ const activities = [
     description: "Jamie initiated team morale check-in",
     agent: "Jamie",
     avatar: "🛡️",
-    avatarUrl: "/avatars/jamie.jpg",
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=jamie&backgroundColor=3b82f6",
     timestamp: "2024-01-15T11:15:00Z",
     status: "info",
     details: "Internal Liaison Jamie started team communication to boost morale"
@@ -77,8 +77,8 @@ const activities = [
     title: "Agent Offline",
     description: "Toby went offline during active support session",
     agent: "Toby",
-    avatar: "👨‍💻",
-    avatarUrl: "/avatars/toby.jpg",
+    avatar: "👨‍��",
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=toby&backgroundColor=f59e0b",
     timestamp: "2024-01-15T09:45:00Z",
     status: "warning",
     details: "Support Coordinator system connection lost during customer support task"
@@ -245,7 +245,7 @@ export default function ActivityLogPage() {
                     {activity.avatar ? (
                       <Avatar className="h-8 w-8">
                         <AvatarImage 
-                          src={`https://api.dicebear.com/9.x/croodles/svg?seed=${activity.agent.toLowerCase()}&size=100`}
+                          src={activity.avatarUrl}
                           alt={activity.agent} 
                         />
                         <AvatarFallback>{activity.avatar}</AvatarFallback>

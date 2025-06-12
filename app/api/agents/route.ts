@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
   try {
     // Get user from the Authorization header
     const authHeader = req.headers.get('authorization');
+    console.log('🔍 Agents API called - Authorization header:', authHeader ? `${authHeader.substring(0, 30)}...` : 'null');
+    
     if (!authHeader?.startsWith('Bearer ')) {
+      console.log('❌ Missing or invalid authorization header');
       return NextResponse.json(
         { error: 'Unauthorized - Missing or invalid authorization header' },
         { status: 401 }
@@ -42,11 +45,20 @@ export async function GET(req: NextRequest) {
     }
 
     const token = authHeader.substring(7);
+    console.log('🔑 Extracted token:', token ? `${token.substring(0, 20)}...` : 'null');
     
     // Verify the JWT token and get user
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
+    console.log('👤 Auth result:', {
+      hasUser: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
+      authError: authError?.message
+    });
+    
     if (authError || !user) {
+      console.log('❌ Authentication failed:', authError?.message);
       return NextResponse.json(
         { error: 'Unauthorized', details: authError?.message },
         { status: 401 }

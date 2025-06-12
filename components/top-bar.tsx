@@ -1,17 +1,14 @@
 "use client"
 
-import { Bell, Search, User, LogOut } from "lucide-react"
+import { Bell, Search, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/lib/auth/supabase-auth-provider"
+import { LogoutButton } from "@/components/auth/logout-button"
 
 export function TopBar() {
-  const { user, signOut } = useAuth()
-
-  const handleSignOut = async () => {
-    await signOut()
-  }
+  const { user } = useAuth()
 
   return (
     <div className="border-b border-pixel bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -45,9 +42,8 @@ export function TopBar() {
                 </p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="font-pixel text-xs">
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
+              <DropdownMenuItem asChild className="font-pixel text-xs p-0">
+                <LogoutButton variant="ghost" size="sm" />
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -49,8 +49,9 @@ export function useAgents() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, session, loading: authLoading } = useAuth();
+  const fetchedRef = useRef(false);
 
-  const fetchAgents = async () => {
+  const fetchAgents = useCallback(async () => {
     if (authLoading) {
       console.log('🔐 useAgents auth state: Auth still loading, skipping fetch');
       return;
@@ -62,7 +63,14 @@ export function useAgents() {
       return;
     }
 
+    // Prevent multiple simultaneous requests
+    if (fetchedRef.current) {
+      console.log('🔐 useAgents: Already fetched, skipping duplicate request');
+      return;
+    }
+
     try {
+      fetchedRef.current = true;
       setLoading(true);
       setError(null);
       
@@ -71,14 +79,18 @@ export function useAgents() {
         session: session ? 'Present' : 'null',
         authLoading,
         isAuthenticated: !!user,
-        userId: user?.id
+        userId: user?.id,
+        accessToken: session?.access_token ? `${session.access_token.substring(0, 20)}...` : 'null'
       });
 
       console.log('🔑 Making API call to /api/agents with token');
       
+      const authHeader = `Bearer ${session.access_token}`;
+      console.log('📤 Authorization header being sent:', session?.access_token ? `Bearer ${session.access_token.substring(0, 20)}...` : 'Bearer null');
+      
       const response = await fetch('/api/agents', {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': authHeader,
           'Content-Type': 'application/json',
         },
       });
@@ -109,12 +121,21 @@ export function useAgents() {
       setAgents([]); // Set empty array on error
     } finally {
       setLoading(false);
+      // Reset the fetch flag after a delay to allow manual refetch
+      setTimeout(() => {
+        fetchedRef.current = false;
+      }, 1000);
     }
-  };
+  }, [user?.id, session?.access_token, authLoading]); // Only depend on essential values
 
   useEffect(() => {
     fetchAgents();
-  }, [user, session, authLoading]);
+  }, [fetchAgents]);
+
+  const refetch = useCallback(() => {
+    fetchedRef.current = false;
+    fetchAgents();
+  }, [fetchAgents]);
 
   const createAgent = async (agentData: {
     name: string;
@@ -174,7 +195,7 @@ export function useAgents() {
     agents,
     loading,
     error,
-    refetch: fetchAgents,
+    refetch,
     createAgent,
     deleteAgent,
   };

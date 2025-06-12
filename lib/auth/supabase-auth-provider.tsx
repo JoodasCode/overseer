@@ -2,94 +2,119 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 
-interface AuthContextType {
+interface AuthContext {
   user: User | null;
   session: Session | null;
+  loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
   signInWithGitHub: () => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
-  signOut: () => Promise<void>;
-  loading: boolean;
+  signOut: () => Promise<{ error: any }>;
+  clearAppState: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContext>({
+  user: null,
+  session: null,
+  loading: true,
+  signIn: async () => ({ error: null }),
+  signUp: async () => ({ error: null }),
+  signInWithGoogle: async () => ({ error: null }),
+  signInWithGitHub: async () => ({ error: null }),
+  resetPassword: async () => ({ error: null }),
+  signOut: async () => ({ error: null }),
+  clearAppState: () => {},
+});
 
-export function SupabaseAuthProvider({ children }: { children: React.ReactNode }) {
+export function SupabaseAuthProvider({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
-  const supabase = createClient();
 
-  console.log('🔧 AuthProvider initialized with:', {
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Missing',
-    supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Missing'
-  });
-
-  // Track session changes to detect multiple logins
-  const handleSessionChange = (newSession: Session | null, event?: string) => {
-    if (!mounted) return; // Prevent hydration issues
+  // 🧹 CRITICAL: Clear all app state when user changes
+  const clearAppState = () => {
+    console.log('🧹 Clearing app state for user switch');
     
-    if (newSession && session && newSession.user.id !== session.user.id) {
-      console.warn('⚠️ SECURITY ALERT: Multiple user sessions detected!');
-      console.warn('Previous user:', session.user.email);
-      console.warn('New user:', newSession.user.email);
-      
-      // Force sign out the previous session
-      signOut();
-      return;
+    // Client instances are now handled by singleton pattern
+    
+    // Clear localStorage caches
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (
+        key.startsWith('chat-') || 
+        key.startsWith('agents-') || 
+        key.startsWith('messages-') ||
+        key.startsWith('supabase-')
+      )) {
+        keysToRemove.push(key);
+      }
     }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
     
-    setSession(newSession);
-    setUser(newSession?.user ?? null);
-    
-    if (event) {
-      console.log('🔄 Auth state changed:', event, newSession?.user?.email);
+    // Clear sessionStorage
+    const sessionKeysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && (
+        key.startsWith('chat-') || 
+        key.startsWith('agents-') || 
+        key.startsWith('messages-')
+      )) {
+        sessionKeysToRemove.push(key);
+      }
     }
-    console.log('🔑 Auth token updated:', newSession?.access_token ? 'Present' : 'None');
+    sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+    
+    console.log('✅ App state cleared:', { localStorageKeys: keysToRemove.length, sessionStorageKeys: sessionKeysToRemove.length });
   };
 
   useEffect(() => {
-    // Set mounted state
-    setMounted(true);
-    
     // Get initial session
-    const getInitialSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error('Error getting session:', error);
-      } else {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.access_token) {
-          console.log('🔑 Auth token updated: Present');
-        } else {
-          console.log('🔑 Auth token updated: None');
-        }
-      }
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
+      console.log('🔐 Initial session loaded:', { hasSession: !!session, userId: session?.user?.id });
+      setSession(session);
+      setUser(session?.user ?? null);
       setLoading(false);
-    };
-
-    getInitialSession();
+    });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: string, session: Session | null) => {
-        handleSessionChange(session, event);
-        setLoading(false);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event: string, session: Session | null) => {
+      console.log('🔄 Auth state changed:', { event, hasSession: !!session, userId: session?.user?.id });
+      
+      // Clear state on sign out or user change
+      if (event === 'SIGNED_OUT') {
+        console.log('👋 User signed out - clearing state');
+        clearAppState();
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        console.log('👋 User signed in:', { userId: session.user.id, email: session.user.email });
+        // Clear state to prevent cross-user contamination
+        clearAppState();
+      } else if (event === 'TOKEN_REFRESHED') {
+        console.log('🔄 Token refreshed for user:', session?.user?.id);
       }
-    );
+      
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
     return () => {
       subscription.unsubscribe();
-      setMounted(false);
     };
-  }, [supabase.auth]);
+  }, []);
 
+  // Authentication functions
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -134,45 +159,23 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
   };
 
   const signOut = async () => {
-    console.log('🚪 Signing out user:', user?.email)
-    
-    // Clear local state immediately
-    setUser(null)
-    setSession(null)
-    
-    // Sign out from Supabase
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      console.error('❌ Error signing out:', error)
-    } else {
-      console.log('✅ Successfully signed out')
-    }
-    
-    // Force clear any remaining storage (additional cleanup)
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem('supabase-auth-token')
-        localStorage.removeItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1] + '-auth-token')
-      } catch (e) {
-        console.warn('Could not clear storage:', e)
-      }
-    }
-  }
-
-  const value = {
-    user,
-    session,
-    signIn,
-    signUp,
-    signInWithGoogle,
-    signInWithGitHub,
-    resetPassword,
-    signOut,
-    loading,
+    const { error } = await supabase.auth.signOut();
+    return { error };
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      loading,
+      signIn,
+      signUp,
+      signInWithGoogle,
+      signInWithGitHub,
+      resetPassword,
+      signOut,
+      clearAppState
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,44 +1,61 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get('code');
-  const error = requestUrl.searchParams.get('error');
-  const errorDescription = requestUrl.searchParams.get('error_description');
-
-  console.log('🔑 Auth callback:', { code: !!code, error, errorDescription });
-
-  // Handle errors (expired links, invalid tokens, etc.)
-  if (error) {
-    console.log('❌ Auth callback error:', { error, errorDescription });
-    // Redirect back to home with error parameter so we can show a helpful message
-    return NextResponse.redirect(new URL(`/?auth_error=${error}&message=${encodeURIComponent(errorDescription || 'Authentication failed')}`, requestUrl.origin));
-  }
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+  const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
-    try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    let response = NextResponse.redirect(`${origin}${next}`)
 
-      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-      
-      if (exchangeError) {
-        console.log('❌ Session exchange error:', exchangeError);
-        return NextResponse.redirect(new URL(`/?auth_error=session_error&message=${encodeURIComponent(exchangeError.message)}`, requestUrl.origin));
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            response.cookies.set({
+              name,
+              value,
+              ...options,
+            })
+          },
+          remove(name: string, options: CookieOptions) {
+            response.cookies.set({
+              name,
+              value: '',
+              ...options,
+            })
+          },
+        },
       }
-
-      console.log('✅ Auth callback successful:', { user: data.user?.email });
+    )
+    
+    try {
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
       
-      // Redirect to dashboard after successful authentication
-      return NextResponse.redirect(new URL('/dashboard', requestUrl.origin));
-    } catch (error) {
-      console.log('❌ Auth callback exception:', error);
-      return NextResponse.redirect(new URL('/?auth_error=unknown&message=Authentication failed', requestUrl.origin));
+      if (!error) {
+        console.log('✅ OAuth callback successful, redirecting to:', next)
+        return response
+      } else {
+        console.error('❌ OAuth callback error:', error)
+        return NextResponse.redirect(
+          `${origin}/auth/auth-error?error=${encodeURIComponent(error.message)}`
+        )
+      }
+    } catch (error: any) {
+      console.error('❌ OAuth callback exception:', error)
+      return NextResponse.redirect(
+        `${origin}/auth/auth-error?error=${encodeURIComponent(error.message)}`
+      )
     }
   }
 
-  // No code and no error - redirect to home
-  return NextResponse.redirect(new URL('/', requestUrl.origin));
+  // No code parameter, redirect to sign-in
+  console.log('❌ No code parameter in OAuth callback')
+  return NextResponse.redirect(`${origin}/auth/signin?error=no_code`)
 } 

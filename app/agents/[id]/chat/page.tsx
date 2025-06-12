@@ -39,7 +39,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useToast } from "@/lib/hooks/use-toast"
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 import { getAgentAvatarUrl } from '@/lib/dicebear-avatar'
 
 interface Agent {
@@ -94,7 +94,7 @@ function AgentChatContent({ agentId }: { agentId: string }) {
   const [isStreaming, setIsStreaming] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   
-  const supabase = createClient()
+  // Using singleton supabase client from import
 
   useEffect(() => {
     if (agentId) {
@@ -258,10 +258,26 @@ function AgentChatContent({ agentId }: { agentId: string }) {
         return
       }
 
+      // Get current user first - CRITICAL SECURITY FIX
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('🔐 Chat Security Check:', { 
+        hasUser: !!user, 
+        userId: user?.id, 
+        userEmail: user?.email,
+        agentId 
+      })
+      
+      if (!user) {
+        console.error('❌ No authenticated user found - blocking chat access')
+        setMessages([])
+        return
+      }
+
       const { data, error } = await supabase
         .from('portal_agent_logs')
         .select('*')
         .eq('agent_id', agentId)
+        .eq('user_id', user.id)  // SECURITY FIX: Filter by user_id
         .order('created_at', { ascending: true })
         .limit(50)
 
@@ -286,10 +302,19 @@ function AgentChatContent({ agentId }: { agentId: string }) {
         return
       }
 
+      // Get current user first - CRITICAL SECURITY FIX
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('No authenticated user found')
+        setMemories([])
+        return
+      }
+
       const { data, error } = await supabase
         .from('portal_agent_memory')
         .select('*')
         .eq('agent_id', agentId)
+        .eq('user_id', user.id)  // SECURITY FIX: Filter by user_id
         .order('importance_score', { ascending: false })
         .limit(20)
 
@@ -320,10 +345,35 @@ function AgentChatContent({ agentId }: { agentId: string }) {
     setMessages(prev => [...prev, tempUserMessage])
 
     try {
-      // Send to chat API (use the same endpoint as the floating chat widget)
+      // 🔐 CRITICAL SECURITY FIX: Get user session for authentication
+      console.log('🔍 DEBUG: Getting session for chat...')
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      console.log('🔍 DEBUG: Session state:', {
+        hasSession: !!session,
+        hasAccessToken: !!session?.access_token,
+        accessTokenLength: session?.access_token?.length || 0,
+        userId: session?.user?.id,
+        sessionError: sessionError
+      })
+      
+      if (!session) {
+        console.error('❌ No session found - user not authenticated')
+        throw new Error('Not authenticated')
+      }
+      
+      if (!session.access_token) {
+        console.error('❌ Session exists but no access token')
+        throw new Error('No access token')
+      }
+
+      console.log('🔍 DEBUG: Sending chat request with token:', session.access_token.substring(0, 20) + '...')
+
+      // Send to chat API with authentication header
       const response = await fetch(`/api/agents/${agentId}/chat`, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -335,8 +385,12 @@ function AgentChatContent({ agentId }: { agentId: string }) {
         })
       })
 
+      console.log('🔍 DEBUG: Chat API response status:', response.status)
+
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+        const errorText = await response.text()
+        console.error('❌ Chat API error:', { status: response.status, body: errorText })
+        throw new Error(`API error: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()

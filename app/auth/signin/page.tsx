@@ -1,28 +1,50 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth/supabase-auth-provider';
 import { ModernAuthForm } from '@/components/auth/modern-auth-form';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle } from 'lucide-react';
 
 export default function SignInPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
+
+  // Check if user was just logged out
+  const loggedOut = searchParams?.get('logged_out') === 'true';
+  const loginError = searchParams?.get('error');
 
   useEffect(() => {
-    // Redirect authenticated users to dashboard
-    if (user && !loading) {
+    // Show logout success message briefly
+    if (loggedOut && !user) {
+      setShowLogoutSuccess(true);
+      // Clear the URL parameter after showing message
+      const timer = setTimeout(() => {
+        setShowLogoutSuccess(false);
+        // Clean up the URL
+        const url = new URL(window.location.href);
+        url.searchParams.delete('logged_out');
+        window.history.replaceState({}, '', url.toString());
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [loggedOut, user]);
+
+  useEffect(() => {
+    // Only redirect if we have a user and we're not loading
+    if (user && !loading && !loggedOut) {
       router.push('/dashboard');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, loggedOut]);
 
   const handleAuthSuccess = () => {
     router.push('/dashboard');
   };
 
-  // Show loading while checking authentication
-  if (loading) {
+  // Show loading only when actually loading auth state (not when logged out)
+  if (loading && !loggedOut) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -44,6 +66,28 @@ export default function SignInPage() {
             Manage your AI agent team
           </p>
         </div>
+
+        {/* Logout Success Message */}
+        {showLogoutSuccess && (
+          <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <div className="flex items-center gap-2 text-green-800 dark:text-green-200">
+              <CheckCircle className="w-5 h-5" />
+              <p className="text-sm font-medium">Successfully logged out</p>
+            </div>
+          </div>
+        )}
+
+        {/* Login Error Message */}
+        {loginError && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-800 dark:text-red-200">
+              {loginError === 'logout_failed' 
+                ? 'Logout encountered an error, but you have been signed out.'
+                : 'An error occurred during authentication.'
+              }
+            </p>
+          </div>
+        )}
         
         <ModernAuthForm 
           defaultTab="signin" 

@@ -1,171 +1,448 @@
 "use client"
 
+import { useState, useEffect } from 'react'
 import { SharedLayout } from '@/components/shared/SharedLayout'
-import { Save, User, Lock, Bell, Palette, Globe, Download, Trash2, Check, Crown, Zap, Plus, BarChart3, CreditCard, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { 
+  Coins, 
+  TrendingUp, 
+  Calendar, 
+  AlertTriangle,
+  CreditCard,
+  BarChart3,
+  Clock,
+  Zap
+} from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { supabase } from "@/lib/supabase/client"
 
-// Sample invoice data
-const invoices = [
-  {
-    id: "INV001",
-    date: "2024-01-15",
-    amount: "$29.00",
-    status: "Paid",
-    description: "Pro Plan - January 2024"
-  },
-  {
-    id: "INV002", 
-    date: "2023-12-15",
-    amount: "$29.00",
-    status: "Paid",
-    description: "Pro Plan - December 2023"
-  },
-  {
-    id: "INV003",
-    date: "2023-11-15", 
-    amount: "$29.00",
-    status: "Paid",
-    description: "Pro Plan - November 2023"
-  }
-]
+interface TokenUsage {
+  userId: string
+  tokensUsed: number
+  tokenQuota: number
+  tokensRemaining: number
+  percentUsed: number
+  lastReset: string
+  resetPeriod: string
+  lifetimeTokens: number
+}
 
-// Usage data
-const usageData = [
-  {
-    resource: "AI Agents",
-    used: 5,
-    limit: 25,
-    percentage: 20
-  },
-  {
-    resource: "API Calls",
-    used: 2847,
-    limit: 10000,
-    percentage: 28
-  },
-  {
-    resource: "Storage",
-    used: "1.2 GB",
-    limit: "10 GB", 
-    percentage: 12
-  },
-  {
-    resource: "Team Members",
-    used: 3,
-    limit: 10,
-    percentage: 30
-  }
-]
+interface UsageAnalytics {
+  dailyUsage: Array<{ date: string; tokens: number }>
+  weeklyTrend: number // percentage change
+  averagePerDay: number
+  mostActiveDay: string
+  peakUsageHour: number
+}
+
+interface UserPlan {
+  user_id: string
+  email: string
+  subscription_plan: string
+  tokens_used: number
+  token_quota: number
+  tokens_remaining: number
+  last_reset: string
+}
 
 export default function SettingsPage() {
+  const { toast } = useToast()
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null)
+  const [analytics, setAnalytics] = useState<UsageAnalytics | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState("usage")
+  const [userPlans, setUserPlans] = useState<UserPlan[]>([])
+  const [loadingPlans, setLoadingPlans] = useState(false)
+
+  useEffect(() => {
+    loadTokenUsage()
+    loadAnalytics()
+  }, [])
+
+  const loadTokenUsage = async () => {
+    try {
+      const response = await fetch('/api/tokens/usage')
+      if (response.ok) {
+        const usage = await response.json()
+        setTokenUsage(usage)
+      }
+    } catch (error) {
+      console.error('Error loading token usage:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadAnalytics = async () => {
+    try {
+      // Mock analytics for now - will be replaced with real API
+      const mockAnalytics: UsageAnalytics = {
+        dailyUsage: [
+          { date: '2024-01-01', tokens: 15 },
+          { date: '2024-01-02', tokens: 22 },
+          { date: '2024-01-03', tokens: 18 },
+          { date: '2024-01-04', tokens: 31 },
+          { date: '2024-01-05', tokens: 28 },
+          { date: '2024-01-06', tokens: 19 },
+          { date: '2024-01-07', tokens: 25 }
+        ],
+        weeklyTrend: 12.5,
+        averagePerDay: 22.6,
+        mostActiveDay: 'Thursday',
+        peakUsageHour: 14
+      }
+      setAnalytics(mockAnalytics)
+    } catch (error) {
+      console.error('Error loading analytics:', error)
+    }
+  }
+
+  const getPlanRecommendation = () => {
+    if (!tokenUsage) return null
+    
+    if (tokenUsage.percentUsed > 90) {
+      return {
+        plan: 'PRO',
+        reason: 'You\'re using 90%+ of your tokens',
+        benefits: ['2,000 tokens/month', 'Priority support', 'Advanced analytics']
+      }
+    } else if (tokenUsage.percentUsed > 70) {
+      return {
+        plan: 'PRO',
+        reason: 'You\'re on track to exceed your quota',
+        benefits: ['2,000 tokens/month', 'Priority support', 'Advanced analytics']
+      }
+    }
+    return null
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric' 
+    })
+  }
+
+  const recommendation = getPlanRecommendation()
+
+  const loadAllUserPlans = async () => {
+    setLoadingPlans(true)
+    try {
+      const { data, error } = await supabase.rpc('get_all_user_plans')
+      if (error) throw error
+      setUserPlans(data || [])
+    } catch (error) {
+      console.error('Error loading user plans:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load user plans",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingPlans(false)
+    }
+  }
+
+  const upgradeUserPlan = async (userId: string, newPlan: string) => {
+    try {
+      const { data, error } = await supabase.rpc('upgrade_user_plan', {
+        p_user_id: userId,
+        p_new_plan: newPlan
+      })
+      
+      if (error) throw error
+      
+      toast({
+        title: "Success",
+        description: `User upgraded to ${newPlan} plan`,
+      })
+      
+      // Reload plans
+      loadAllUserPlans()
+    } catch (error) {
+      console.error('Error upgrading user:', error)
+      toast({
+        title: "Error",
+        description: "Failed to upgrade user plan",
+        variant: "destructive"
+      })
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "admin") {
+      loadAllUserPlans()
+    }
+  }, [activeTab])
+
+  if (loading) {
+    return (
+      <SharedLayout title="Settings" description="Manage your account and usage">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p>Loading settings...</p>
+          </div>
+        </div>
+      </SharedLayout>
+    )
+  }
+
   return (
-    <SharedLayout title="Settings" description="Configure your account and system preferences">
+    <SharedLayout title="Settings" description="Manage your account and usage">
       <div className="space-y-6">
-        <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="usage">Usage</TabsTrigger>
             <TabsTrigger value="billing">Billing</TabsTrigger>
-            <TabsTrigger value="about">About</TabsTrigger>
+            <TabsTrigger value="account">Account</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            <TabsTrigger value="admin">Admin</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="general" className="space-y-6">
+          <TabsContent value="usage" className="space-y-6">
+            {/* Token Usage Overview */}
+            {tokenUsage && (
+              <Card className={`${tokenUsage.tokensRemaining <= 50 ? 'border-orange-500' : ''}`}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Coins className="h-5 w-5 text-primary" />
+                      <div>
+                        <CardTitle>Token Usage</CardTitle>
+                        <CardDescription>
+                          Your current usage for this {tokenUsage.resetPeriod} period
+                        </CardDescription>
+                      </div>
+                    </div>
+                    {tokenUsage.tokensRemaining <= 50 && (
+                      <AlertTriangle className="h-5 w-5 text-orange-500" />
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tokens Used</span>
+                      <span className="font-medium">
+                        {tokenUsage.tokensUsed.toLocaleString()} / {tokenUsage.tokenQuota.toLocaleString()}
+                      </span>
+                    </div>
+                    <Progress 
+                      value={tokenUsage.percentUsed} 
+                      className={`h-3 ${tokenUsage.percentUsed > 90 ? 'text-orange-500' : ''}`}
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{tokenUsage.tokensRemaining.toLocaleString()} remaining</span>
+                      <span>{tokenUsage.percentUsed.toFixed(1)}% used</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <div className="text-2xl font-bold text-primary">
+                        {tokenUsage.tokensRemaining.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Remaining</div>
+                    </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <div className="text-2xl font-bold">
+                        {tokenUsage.lifetimeTokens.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Lifetime</div>
+                    </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <div className="text-2xl font-bold">
+                        {analytics?.averagePerDay.toFixed(1) || '0'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Daily Avg</div>
+                    </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <div className="text-2xl font-bold">
+                        {Math.ceil(tokenUsage.tokensRemaining / (analytics?.averagePerDay || 1))}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Days Left</div>
+                    </div>
+                  </div>
+
+                  {tokenUsage.tokensRemaining <= 50 && (
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-orange-800">Low Token Warning</h4>
+                          <p className="text-sm text-orange-700 mt-1">
+                            You have {tokenUsage.tokensRemaining} tokens remaining. 
+                            Consider upgrading your plan to continue chatting with agents.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Usage Analytics */}
+            {analytics && (
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      Usage Trends
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Weekly trend</span>
+                        <div className="flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3 text-green-500" />
+                          <span className="text-green-500 font-medium">
+                            +{analytics.weeklyTrend}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Most active day</span>
+                        <span className="font-medium">{analytics.mostActiveDay}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Peak usage time</span>
+                        <span className="font-medium">{analytics.peakUsageHour}:00</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" />
+                      Daily Usage
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {analytics.dailyUsage.slice(-7).map((day, index) => (
+                        <div key={day.date} className="flex items-center gap-3">
+                          <span className="text-xs text-muted-foreground w-12">
+                            {formatDate(day.date)}
+                          </span>
+                          <div className="flex-1">
+                            <Progress 
+                              value={(day.tokens / Math.max(...analytics.dailyUsage.map(d => d.tokens))) * 100} 
+                              className="h-2"
+                            />
+                          </div>
+                          <span className="text-xs font-medium w-8 text-right">
+                            {day.tokens}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Plan Recommendation */}
+            {recommendation && (
+              <Card className="border-blue-200 bg-blue-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-blue-800">
+                    <Zap className="h-5 w-5" />
+                    Recommended Upgrade
+                  </CardTitle>
+                  <CardDescription className="text-blue-700">
+                    {recommendation.reason}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                      {recommendation.plan} Plan
+                    </Badge>
+                  </div>
+                  <ul className="space-y-2">
+                    {recommendation.benefits.map((benefit, index) => (
+                      <li key={index} className="flex items-center gap-2 text-sm text-blue-700">
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                        {benefit}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button className="w-full" onClick={() => {
+                    toast({
+                      title: "Upgrade Coming Soon",
+                      description: "Plan upgrades will be available in the next update."
+                    })
+                  }}>
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Upgrade to {recommendation.plan}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Reset Information */}
+            {tokenUsage && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Reset Schedule
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Next Reset</p>
+                      <p className="text-xs text-muted-foreground">
+                        Your tokens reset {tokenUsage.resetPeriod}ly
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">
+                        {new Date(new Date(tokenUsage.lastReset).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3 inline mr-1" />
+                        {Math.ceil((new Date(new Date(tokenUsage.lastReset).getTime() + 30 * 24 * 60 * 60 * 1000).getTime() - Date.now()) / (24 * 60 * 60 * 1000))} days
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="billing" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Profile Information
-                </CardTitle>
-                <CardDescription>
-                  Update your personal information and preferences
-                </CardDescription>
+                <CardTitle>Billing</CardTitle>
+                <CardDescription>Manage your subscription and billing information</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" defaultValue="John" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" defaultValue="Doe" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="john@example.com" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bio">Bio</Label>
-                  <Textarea id="bio" placeholder="Tell us about yourself..." />
-                </div>
-                <Button>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Changes
-                </Button>
+              <CardContent>
+                <p className="text-muted-foreground">Billing features coming soon...</p>
               </CardContent>
             </Card>
+          </TabsContent>
 
+          <TabsContent value="account" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="h-5 w-5" />
-                  Appearance
-                </CardTitle>
-                <CardDescription>
-                  Customize the look and feel of your workspace
-                </CardDescription>
+                <CardTitle>Account</CardTitle>
+                <CardDescription>Manage your account settings</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Dark Mode</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Switch between light and dark themes
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="space-y-2">
-                  <Label>Language</Label>
-                  <Select defaultValue="en">
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="es">Spanish</SelectItem>
-                      <SelectItem value="fr">French</SelectItem>
-                      <SelectItem value="de">German</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Timezone</Label>
-                  <Select defaultValue="utc">
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="utc">UTC</SelectItem>
-                      <SelectItem value="est">Eastern Time</SelectItem>
-                      <SelectItem value="pst">Pacific Time</SelectItem>
-                      <SelectItem value="cet">Central European Time</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <CardContent>
+                <p className="text-muted-foreground">Account settings coming soon...</p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -173,394 +450,74 @@ export default function SettingsPage() {
           <TabsContent value="notifications" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5" />
-                  Notification Preferences
-                </CardTitle>
-                <CardDescription>
-                  Choose what notifications you want to receive
-                </CardDescription>
+                <CardTitle>Notifications</CardTitle>
+                <CardDescription>Manage your notification settings</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive notifications via email
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Agent Alerts</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Get notified when agents go offline or encounter errors
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Task Completions</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive notifications when tasks are completed
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Weekly Reports</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Get weekly performance summaries
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
+              <CardContent>
+                <p className="text-muted-foreground">Notification settings coming soon...</p>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="security" className="space-y-6">
+          <TabsContent value="admin">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Lock className="h-5 w-5" />
-                  Security Settings
-                </CardTitle>
+                <CardTitle>Plan Management</CardTitle>
                 <CardDescription>
-                  Manage your account security and privacy
+                  Manage user subscription plans for testing
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input id="currentPassword" type="password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="newPassword">New Password</Label>
-                  <Input id="newPassword" type="password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input id="confirmPassword" type="password" />
-                </div>
-                <Button>Update Password</Button>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Two-Factor Authentication</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Add an extra layer of security to your account
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="billing" className="space-y-6">
-            {/* Current Plan Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Crown className="h-5 w-5 text-yellow-500" />
-                  Current Plan
-                </CardTitle>
-                <CardDescription>
-                  You&apos;re currently on the Pro Plan
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border">
-                  <div className="space-y-1">
-                    <h3 className="text-xl font-semibold flex items-center gap-2">
-                      Pro Plan
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                        Current
-                      </Badge>
-                    </h3>
-                    <p className="text-2xl font-bold">$29<span className="text-sm font-normal text-muted-foreground">/month</span></p>
-                    <p className="text-sm text-muted-foreground">Next billing: February 15, 2024</p>
-                  </div>
-                  <div className="text-right space-y-2">
-                    <Button variant="outline" size="sm">
-                      Manage Plan
-                    </Button>
-                    <Button variant="ghost" size="sm" className="w-full">
-                      Cancel Subscription
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Usage Overview */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Usage Overview
-                </CardTitle>
-                <CardDescription>
-                  Current usage for your billing period
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {usageData.map((item, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">{item.resource}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {typeof item.used === 'number' ? item.used : item.used} / {item.limit}
-                        </span>
-                      </div>
-                      <Progress value={item.percentage} className="h-2" />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Payment Method */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Payment Method
-                  </CardTitle>
-                  <CardDescription>
-                    Manage your billing information
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 border rounded-lg">
-                    <div className="w-10 h-6 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs flex items-center justify-center font-bold">
-                      VISA
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium">•••• •••• •••• 4242</p>
-                      <p className="text-sm text-muted-foreground">Expires 12/25</p>
-                    </div>
-                    <Badge variant="secondary">Default</Badge>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Card
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
-                      Update
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Billing Address */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Globe className="h-5 w-5" />
-                    Billing Address
-                  </CardTitle>
-                  <CardDescription>
-                    Your invoice billing address
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="text-sm space-y-1">
-                    <p className="font-medium">John Doe</p>
-                    <p className="text-muted-foreground">123 Business Ave</p>
-                    <p className="text-muted-foreground">Suite 100</p>
-                    <p className="text-muted-foreground">San Francisco, CA 94105</p>
-                    <p className="text-muted-foreground">United States</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="w-full">
-                    Update Address
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Recent Invoices */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Recent Invoices
-                </CardTitle>
-                <CardDescription>
-                  Your billing history and downloads
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Invoice</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoices.map((invoice) => (
-                      <TableRow key={invoice.id}>
-                        <TableCell className="font-medium">{invoice.id}</TableCell>
-                        <TableCell>{invoice.date}</TableCell>
-                        <TableCell>{invoice.description}</TableCell>
-                        <TableCell>
-                          <Badge variant={invoice.status === 'Paid' ? 'secondary' : 'destructive'}>
-                            {invoice.status}
+                {loadingPlans ? (
+                  <div className="text-center py-4">Loading user plans...</div>
+                ) : (
+                  <div className="space-y-4">
+                    {userPlans.map((user) => (
+                      <div key={user.user_id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="space-y-1">
+                          <div className="font-medium">{user.email}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {user.tokens_used} / {user.token_quota} tokens used
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <Badge variant={user.subscription_plan === 'FREE' ? 'secondary' : 'default'}>
+                            {user.subscription_plan}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{invoice.amount}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+                          <Select
+                            value={user.subscription_plan}
+                            onValueChange={(newPlan) => upgradeUserPlan(user.user_id, newPlan)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="FREE">FREE</SelectItem>
+                              <SelectItem value="PREMIUM">PREMIUM</SelectItem>
+                              <SelectItem value="TEAM">TEAM</SelectItem>
+                              <SelectItem value="ENTERPRISE">ENTERPRISE</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            {/* Upgrade Options */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-yellow-500" />
-                  Upgrade Your Plan
-                </CardTitle>
-                <CardDescription>
-                  Get more features and higher limits
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Starter Plan */}
-                  <div className="border rounded-lg p-4 space-y-3">
-                    <div className="space-y-1">
-                      <h3 className="font-semibold">Starter</h3>
-                      <p className="text-2xl font-bold">$9<span className="text-sm font-normal text-muted-foreground">/month</span></p>
-                    </div>
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        5 AI Agents
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        1,000 API Calls
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        1 Team Member
-                      </li>
-                    </ul>
-                    <Button variant="outline" size="sm" className="w-full">
-                      Downgrade
-                    </Button>
+                    
+                    {userPlans.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No users found
+                      </div>
+                    )}
                   </div>
-
-                  {/* Current Pro Plan */}
-                  <div className="border-2 border-blue-500 rounded-lg p-4 space-y-3 relative">
-                    <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-blue-500">
-                      Current Plan
-                    </Badge>
-                    <div className="space-y-1">
-                      <h3 className="font-semibold">Pro</h3>
-                      <p className="text-2xl font-bold">$29<span className="text-sm font-normal text-muted-foreground">/month</span></p>
-                    </div>
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        25 AI Agents
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        10,000 API Calls
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        10 Team Members
-                      </li>
-                    </ul>
-                    <Button size="sm" className="w-full" disabled>
-                      Current Plan
-                    </Button>
+                )}
+                
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-900 mb-2">Plan Details:</h4>
+                  <div className="text-sm text-blue-800 space-y-1">
+                    <div><strong>FREE:</strong> 20 tokens/month - Access all features</div>
+                    <div><strong>PREMIUM:</strong> 1,000 tokens/month - Individual use</div>
+                    <div><strong>TEAM:</strong> 5,000 tokens/month - Team collaboration</div>
+                    <div><strong>ENTERPRISE:</strong> 15,000 tokens/month - Large organizations</div>
                   </div>
-
-                  {/* Enterprise Plan */}
-                  <div className="border rounded-lg p-4 space-y-3">
-                    <div className="space-y-1">
-                      <h3 className="font-semibold">Enterprise</h3>
-                      <p className="text-2xl font-bold">$99<span className="text-sm font-normal text-muted-foreground">/month</span></p>
-                    </div>
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        Unlimited Agents
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        100,000 API Calls
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        Unlimited Team Members
-                      </li>
-                    </ul>
-                    <Button size="sm" className="w-full">
-                      Upgrade
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="about" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Globe className="h-5 w-5" />
-                  About Overseer
-                </CardTitle>
-                <CardDescription>
-                  System information and resources
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Version</Label>
-                  <p className="text-sm">1.0.0</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Last Updated</Label>
-                  <p className="text-sm">January 15, 2024</p>
-                </div>
-                <Separator />
-                <div className="flex gap-2">
-                  <Button variant="outline">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export Data
-                  </Button>
-                  <Button variant="destructive">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Account
-                  </Button>
                 </div>
               </CardContent>
             </Card>

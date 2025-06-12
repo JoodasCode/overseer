@@ -10,6 +10,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Agent {
   id: string
@@ -239,7 +241,22 @@ export function AgentChatDialog({ agent, isOpen, onClose }: AgentChatDialogProps
                           : "bg-muted"
                       )}
                     >
-                      <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                      <div className="markdown-content whitespace-pre-wrap break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>p]:my-1 [&>strong]:font-bold [&>em]:italic [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>li]:my-0.5 [&>code]:bg-black/10 [&>code]:px-1 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => <span>{children}</span>,
+                            strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                            em: ({ children }) => <em className="italic">{children}</em>,
+                            code: ({ children }) => <code className="bg-black/10 px-1 py-0.5 rounded text-xs">{children}</code>,
+                            ul: ({ children }) => <ul className="list-disc pl-4 my-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal pl-4 my-1">{children}</ol>,
+                            li: ({ children }) => <li className="my-0.5">{children}</li>,
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
                     </div>
                     <div className={cn(
                       "text-xs text-muted-foreground px-1",

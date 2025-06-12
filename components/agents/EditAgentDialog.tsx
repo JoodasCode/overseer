@@ -34,7 +34,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { X } from "lucide-react"
 import { useToast } from "@/lib/hooks/use-toast"
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -136,7 +136,7 @@ export function EditAgentDialog({ open, onOpenChange, agent, onAgentUpdated }: E
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [customTool, setCustomTool] = useState('')
   
-  const supabase = createClient()
+      // supabase is already imported
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

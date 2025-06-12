@@ -1,18 +1,20 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server'
+import { updateSession } from '@/lib/supabase/middleware'
 
-// Simple middleware for development
-export function middleware(request: NextRequest) {
-  // Log auth-related requests for debugging
-  if (request.nextUrl.pathname.includes('auth') || request.nextUrl.pathname.includes('dashboard')) {
-    console.log('🌐 Middleware:', request.nextUrl.pathname, 'User-Agent:', request.headers.get('user-agent')?.slice(0, 50));
-  }
-  
-  return NextResponse.next();
+// Simple middleware for development - authentication will be handled client-side
+export async function middleware(request: NextRequest) {
+  return await updateSession(request)
 }
 
 export const config = {
   matcher: [
-    '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
-  ],
-};
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * Feel free to modify this pattern to include more paths.
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'
+  ]
+}

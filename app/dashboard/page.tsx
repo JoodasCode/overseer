@@ -21,19 +21,19 @@ const agents = [
     tasks: 12,
     lastActivity: "2 minutes ago",
     avatar: "🧑‍💼",
-    avatarUrl: "/avatars/alex.jpg"
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=alex&backgroundColor=8b5cf6"
   },
   {
     id: 2,
     name: "Dana",
-    role: "Visual Assistant",
+    role: "Creative Assistant",
     department: "Communications",
     status: "Active",
     performance: 89,
     tasks: 8,
     lastActivity: "5 minutes ago",
     avatar: "⚙️",
-    avatarUrl: "/avatars/dana.jpg"
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=dana&backgroundColor=ec4899"
   },
   {
     id: 3,
@@ -45,31 +45,31 @@ const agents = [
     tasks: 3,
     lastActivity: "1 hour ago",
     avatar: "✍️",
-    avatarUrl: "/avatars/riley.jpg"
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=riley&backgroundColor=10b981"
   },
   {
     id: 4,
     name: "Jamie",
-    role: "Internal Liaison",
+    role: "Team Coordinator",
     department: "Communications",
     status: "Active",
     performance: 98,
     tasks: 15,
     lastActivity: "30 seconds ago",
     avatar: "🛡️",
-    avatarUrl: "/avatars/jamie.jpg"
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=jamie&backgroundColor=3b82f6"
   },
   {
     id: 5,
     name: "Toby",
-    role: "Support Coordinator",
+    role: "Support Specialist",
     department: "Communications",
     status: "Error",
     performance: 45,
     tasks: 0,
     lastActivity: "15 minutes ago",
     avatar: "👨‍💻",
-    avatarUrl: "/avatars/toby.jpg"
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=toby&backgroundColor=f59e0b"
   }
 ]
 
@@ -188,7 +188,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
                           <AvatarImage 
-                            src={`https://api.dicebear.com/9.x/croodles/svg?seed=${agent.name.toLowerCase()}&size=100`}
+                            src={agent.avatarUrl}
                             alt={agent.name} 
                           />
                           <AvatarFallback>{agent.avatar}</AvatarFallback>

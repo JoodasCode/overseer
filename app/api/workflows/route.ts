@@ -1,59 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase-client';
-import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { createClient } from '@supabase/supabase-js';
+import { workflowExecutor, type Workflow } from '@/lib/workflow-engine/workflow-executor';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
  * GET /api/workflows
  * Retrieve all workflows for the authenticated user
  */
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
     
-    if (authError || !user) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized', details: authError?.message },
-        { status: 401 }
+        { error: 'User ID is required' },
+        { status: 400 }
       );
     }
 
-    // Parse query parameters
-    const url = new URL(req.url);
-    const status = url.searchParams.get('status');
-    
-    // Build query with Prisma
-    const whereClause: any = {
-      user_id: user.id
-    };
-    
-    // Apply filters if provided
-    if (status) {
-      whereClause.status = status;
-    }
-    
-    try {
-      // Execute query with Prisma
-      const workflows = await prisma.workflow.findMany({
-        where: whereClause,
-        orderBy: {
-          updated_at: 'desc'
-        }
-      });
-      
-      return NextResponse.json({ workflows });
-    } catch (dbError) {
-      console.error('Database error fetching workflows:', dbError);
+    const { data: workflows, error } = await supabase
+      .from('workflows')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching workflows:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch workflows', details: (dbError as Error).message },
+        { error: 'Failed to fetch workflows' },
         { status: 500 }
       );
     }
+
+    return NextResponse.json({ workflows: workflows || [] });
   } catch (error) {
-    console.error('Error fetching workflows:', error);
+    console.error('Error in GET /api/workflows:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch workflows', details: (error as Error).message },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -63,88 +50,165 @@ export async function GET(req: NextRequest) {
  * POST /api/workflows
  * Create a new workflow
  */
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // Get user ID from auth context
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
+    const body = await request.json();
+    const { userId, workflow } = body;
+
+    if (!userId || !workflow) {
       return NextResponse.json(
-        { error: 'Unauthorized', details: authError?.message },
-        { status: 401 }
-      );
-    }
-    
-    // Parse request body
-    let body;
-    try {
-      body = await req.json();
-    } catch (parseError) {
-      return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
+        { error: 'User ID and workflow data are required' },
         { status: 400 }
       );
     }
-    const { name, description, nodes, status, agent_id } = body;
-    
-    // Validate required fields
-    if (!name || !nodes) {
+
+    // Validate workflow structure
+    if (!workflow.name || !workflow.trigger || !workflow.agent || !workflow.steps) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Workflow must have name, trigger, agent, and steps' },
         { status: 400 }
       );
     }
-    
-    // Get or create default agent for user if agent_id not provided
-    let finalAgentId = agent_id;
-    if (!finalAgentId) {
-      const defaultAgent = await prisma.agent.findFirst({
-        where: { user_id: user.id }
-      });
-      if (!defaultAgent) {
-        return NextResponse.json(
-          { error: 'No agent found for user' },
-          { status: 400 }
-        );
-      }
-      finalAgentId = defaultAgent.id;
-    }
-    
-    // Validate nodes structure (basic validation)
-    if (!Array.isArray(nodes) && typeof nodes !== 'object') {
+
+    const workflowToSave = {
+      id: workflow.id || `workflow_${Date.now()}`,
+      user_id: userId,
+      name: workflow.name,
+      description: workflow.description || '',
+      trigger: workflow.trigger,
+      agent: workflow.agent,
+      steps: workflow.steps,
+      status: workflow.status || 'draft',
+      metadata: workflow.metadata || {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('workflows')
+      .insert(workflowToSave)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating workflow:', error);
       return NextResponse.json(
-        { error: 'Invalid nodes structure' },
-        { status: 400 }
-      );
-    }
-    
-    try {
-      // Insert new workflow with Prisma
-      const workflow = await prisma.workflow.create({
-        data: {
-          name,
-          description: description || '',
-          config: { nodes }, // Store nodes in config field as JSON
-          status: status || 'draft',
-          user_id: user.id,
-          agent_id: finalAgentId,
-          created_at: new Date(),
-          updated_at: new Date()
-        }
-      });
-      
-      return NextResponse.json({ workflow }, { status: 201 });
-    } catch (dbError) {
-      console.error('Database error creating workflow:', dbError);
-      return NextResponse.json(
-        { error: 'Failed to create workflow', details: (dbError as Error).message },
+        { error: 'Failed to create workflow' },
         { status: 500 }
       );
     }
+
+    return NextResponse.json({ 
+      success: true, 
+      workflow: data,
+      message: 'Workflow created successfully'
+    });
   } catch (error) {
-    console.error('Error creating workflow:', error);
+    console.error('Error in POST /api/workflows:', error);
     return NextResponse.json(
-      { error: 'Failed to create workflow', details: (error as Error).message },
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT /api/workflows - Update an existing workflow
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { userId, workflowId, workflow } = body;
+
+    if (!userId || !workflowId || !workflow) {
+      return NextResponse.json(
+        { error: 'User ID, workflow ID, and workflow data are required' },
+        { status: 400 }
+      );
+    }
+
+    const workflowUpdates = {
+      name: workflow.name,
+      description: workflow.description,
+      trigger: workflow.trigger,
+      agent: workflow.agent,
+      steps: workflow.steps,
+      status: workflow.status,
+      metadata: workflow.metadata || {},
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('workflows')
+      .update(workflowUpdates)
+      .eq('id', workflowId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating workflow:', error);
+      return NextResponse.json(
+        { error: 'Failed to update workflow' },
+        { status: 500 }
+      );
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        { error: 'Workflow not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      workflow: data,
+      message: 'Workflow updated successfully'
+    });
+  } catch (error) {
+    console.error('Error in PUT /api/workflows:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/workflows - Delete a workflow
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+    const workflowId = searchParams.get('workflowId');
+
+    if (!userId || !workflowId) {
+      return NextResponse.json(
+        { error: 'User ID and workflow ID are required' },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabase
+      .from('workflows')
+      .delete()
+      .eq('id', workflowId)
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error deleting workflow:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete workflow' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true,
+      message: 'Workflow deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error in DELETE /api/workflows:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

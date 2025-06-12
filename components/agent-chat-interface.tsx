@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { supabase } from "@/lib/supabase-client"
+import { supabase } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -214,11 +214,17 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
   }
 
   const sendMessageToAgent = async (userMessage: string) => {
-    setIsTyping(true)
+    console.log('🟢 sendMessageToAgent called with:', userMessage)
     
     try {
+      setIsTyping(true)
+      
+      console.log('🟢 About to create agent message placeholder')
+      
       // Create the streaming agent response message with unique ID
       const agentMessageId = generateUniqueId()
+      console.log('🟢 Generated agent message ID:', agentMessageId)
+      
       setMessages((prev) => [...prev, {
         id: agentMessageId,
         type: "agent",
@@ -227,35 +233,42 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
         status: "streaming",
         context: ["Agent memory", "Recent conversations", "Current context"],
       }])
+      
+      console.log('🟢 Agent placeholder added to messages')
 
       setIsTyping(false)
       setIsStreaming(true)
 
-      // Get the current session and auth token
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.access_token) {
-        throw new Error('Authentication required. Please log in.')
-      }
-
       console.log('🚀 Sending chat message:', {
         agentId: agent.id,
-        hasToken: !!session.access_token,
-        tokenLength: session.access_token.length,
         userMessage: userMessage
       });
 
-      // Make real API call to chat endpoint with authentication
-      const response = await fetch(`/api/chat/${agent.id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: userMessage }]
+      // Make real API call to chat endpoint - server will read session from cookies
+      let response;
+      try {
+        console.log('📡 About to make fetch request...')
+        response = await fetch(`/api/agents/${agent.id}/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: userMessage,
+            // Send previous chat history (exclude system welcome messages)
+            messages: messages
+              .filter(msg => msg.type !== 'system' && msg.content && msg.content.trim())
+              .map(msg => ({
+                role: msg.type === 'user' ? 'user' : 'assistant',
+                content: msg.content
+              }))
+          })
         })
-      })
+        console.log('📡 Fetch completed, got response:', response.status, response.statusText)
+      } catch (fetchError) {
+        console.error('❌ Fetch request failed:', fetchError)
+        throw new Error(`Network request failed: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`)
+      }
 
       if (!response.ok) {
         let errorText;
@@ -282,37 +295,33 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
         throw new Error(`Chat API error: ${response.status} - ${errorData.error || errorText}`)
       }
 
-      if (!response.body) {
-        throw new Error('No response body received')
+      // Handle JSON response from chat API
+      const data = await response.json()
+      
+      console.log('🔍 Frontend received response:', {
+        data: data,
+        success: data.success,
+        message: data.message,
+        messageLength: data.message?.length,
+        messageType: typeof data.message
+      })
+      
+      if (!data.success || !data.message) {
+        throw new Error(data.error || 'No message received from agent')
       }
 
-      // Handle streaming response from AI package  
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let accumulatedContent = ""
+      console.log('🎯 About to update message with ID:', agentMessageId, 'with content:', `"${data.message}"`)
 
-      while (true) {
-        const { done, value } = await reader.read()
-        
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        accumulatedContent += chunk
-
-        // Update the agent message with streaming content
-        setMessages((prev) => prev.map(msg => 
+      // Update the agent message with the complete response
+      setMessages((prev) => {
+        const updated = prev.map(msg => 
           msg.id === agentMessageId 
-            ? { ...msg, content: accumulatedContent, status: "streaming" }
+            ? { ...msg, content: data.message, status: "sent" as const }
             : msg
-        ))
-      }
-
-      // Mark as complete
-      setMessages((prev) => prev.map(msg => 
-        msg.id === agentMessageId 
-          ? { ...msg, status: "sent" }
-          : msg
-      ))
+        )
+        console.log('📝 Messages after update:', updated.map(m => ({ id: m.id, type: m.type, content: m.content, status: m.status })))
+        return updated
+      })
 
     } catch (error) {
       console.error('Chat error:', error)
@@ -333,8 +342,16 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
   }
 
   const handleSendMessage = () => {
-    if (!inputValue.trim()) return
+    console.log('🔴 BUTTON CLICKED: handleSendMessage called')
+    console.log('🔴 Input value:', inputValue)
+    console.log('🔴 Input trimmed:', inputValue.trim())
+    
+    if (!inputValue.trim()) {
+      console.log('🔴 EARLY RETURN: empty input')
+      return
+    }
 
+    console.log('🔴 Creating user message...')
     const userMessage: Message = {
       id: generateUniqueId(),
       type: "user",
@@ -343,15 +360,22 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
       status: "sent",
     }
 
+    console.log('🔴 User message created:', userMessage)
+    console.log('🔴 Adding user message to state...')
     setMessages((prev) => [...prev, userMessage])
+    console.log('🔴 Clearing input...')
     setInputValue("")
 
+    console.log('🔴 About to call sendMessageToAgent with:', inputValue)
     // Send message to real agent
     sendMessageToAgent(inputValue)
+    console.log('🔴 sendMessageToAgent call completed')
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
+    console.log('🟡 KEY PRESSED:', e.key, 'shiftKey:', e.shiftKey)
     if (e.key === "Enter" && !e.shiftKey) {
+      console.log('🟡 ENTER TRIGGERED - calling handleSendMessage')
       e.preventDefault()
       handleSendMessage()
     }
@@ -579,14 +603,26 @@ export function AgentChatInterface({ agent, isOpen, onClose }: AgentChatInterfac
             <div className="flex space-x-2">
               <Input
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => {
+                  console.log('🟡 INPUT CHANGED:', e.target.value)
+                  setInputValue(e.target.value)
+                }}
                 onKeyPress={handleKeyPress}
                 placeholder={`Message ${agent.name}...`}
                 className="flex-1 font-clean border-pixel"
                 disabled={isTyping || isStreaming}
               />
               <Button
-                onClick={handleSendMessage}
+                onClick={() => {
+                  console.log('🟡 BUTTON CLICKED! Debug info:', {
+                    inputValue,
+                    inputTrimmed: inputValue.trim(),
+                    isTyping,
+                    isStreaming,
+                    disabled: !inputValue.trim() || isTyping || isStreaming
+                  })
+                  handleSendMessage()
+                }}
                 disabled={!inputValue.trim() || isTyping || isStreaming}
                 className="font-pixel text-xs"
               >

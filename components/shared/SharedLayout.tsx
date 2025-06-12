@@ -24,9 +24,10 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/lib/auth/supabase-auth-provider"
 import { getAgentAvatarUrl } from '@/lib/dicebear-avatar'
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 import { Agent } from '@/lib/types'
 import { ShadcnChatTrigger } from '@/components/chat/ShadcnChatTrigger'
+import { LogoutButton } from '@/components/auth/logout-button'
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -77,14 +78,22 @@ interface ActivityItem {
 export function SharedLayout({ children, title, description }: SharedLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, signOut } = useAuth()
+  const { user, loading } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [isLoadingActivities, setIsLoadingActivities] = useState(true)
   const [agents, setAgents] = useState<Agent[]>([])
   const [isLoadingAgents, setIsLoadingAgents] = useState(true)
 
-  const supabase = createClient()
+  // supabase is already imported
+
+  // Redirect to signin if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      console.log('🚫 SharedLayout: User not authenticated, redirecting to signin')
+      router.push('/auth/signin')
+    }
+  }, [user, loading, router])
 
   // Fetch agents for chat
   useEffect(() => {
@@ -164,6 +173,23 @@ export function SharedLayout({ children, title, description }: SharedLayoutProps
     fetchActivities()
   }, [user, supabase])
 
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className="h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render anything if not authenticated (will redirect)
+  if (!user) {
+    return null
+  }
+
   const getActivityType = (action: string): 'success' | 'warning' | 'error' | 'info' => {
     if (action.includes('completed') || action.includes('success')) return 'success'
     if (action.includes('failed') || action.includes('error')) return 'error'
@@ -194,10 +220,7 @@ export function SharedLayout({ children, title, description }: SharedLayoutProps
     return `${diffDays} days ago`
   }
 
-  const handleSignOut = async () => {
-    await signOut()
-    router.push('/')
-  }
+
 
   return (
     <div className="h-screen bg-background overflow-hidden">
@@ -282,8 +305,8 @@ export function SharedLayout({ children, title, description }: SharedLayoutProps
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={handleSignOut}>
-                        Sign Out
+                      <DropdownMenuItem asChild>
+                        <LogoutButton variant="ghost" size="sm" />
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -361,80 +384,14 @@ export function SharedLayout({ children, title, description }: SharedLayoutProps
             </div>
           </header>
 
-          <div className="flex flex-1 overflow-hidden">
-            {/* Main Content */}
-            <main className="flex-1 overflow-auto bg-background">
-              <div className="h-full">
-                <div className="p-6 h-full overflow-auto">
-                  {children}
-                </div>
+          {/* Main Content */}
+          <main className="flex-1 overflow-auto bg-background">
+            <div className="h-full">
+              <div className="p-6 h-full overflow-auto">
+                {children}
               </div>
-            </main>
-
-            {/* Right Activity Sidebar */}
-            <aside className="w-72 border-l bg-background/50 flex-shrink-0 overflow-auto">
-              <div className="p-4 space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Recent Activity</h3>
-                  <ScrollArea className="h-[400px]">
-                    <div className="space-y-3">
-                      {activities.map((activity) => (
-                        <div key={activity.id} className="flex gap-3 p-3 rounded-lg border bg-card">
-                          <div className="flex items-start gap-2">
-                            <Avatar className="h-7 w-7 mt-0.5">
-                              <AvatarImage 
-                                src={`https://api.dicebear.com/9.x/croodles/svg?seed=${activity.agent_name.toLowerCase()}&size=100`}
-                                alt={activity.agent_name} 
-                              />
-                              <AvatarFallback className="text-xs">
-                                {activity.agent_name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="mt-0.5">
-                              {getActivityIcon(activity.type)}
-                            </div>
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            <div className="text-sm font-medium">
-                              {activity.agent_name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {activity.action}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {formatTimeAgo(activity.created_at)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <h4 className="text-sm font-medium mb-3">Quick Actions</h4>
-                  <div className="space-y-2">
-                    <Button variant="outline" className="w-full justify-start text-sm h-9">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create New Agent
-                    </Button>
-                    <Button variant="outline" className="w-full justify-start text-sm h-9">
-                      <Zap className="mr-2 h-4 w-4" />
-                      Run Diagnostics
-                    </Button>
-                    <Button variant="outline" className="w-full justify-start text-sm h-9" asChild>
-                      <Link href="/settings">
-                        <Settings className="mr-2 h-4 w-4" />
-                        System Settings
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </aside>
-          </div>
+            </div>
+          </main>
         </div>
       </div>
 

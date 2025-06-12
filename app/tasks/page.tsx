@@ -15,87 +15,75 @@ import { getAgentAvatarUrl } from '@/lib/dicebear-avatar'
 const tasks = [
   {
     id: 1,
-    title: "Q1 Strategic Planning",
-    description: "Develop comprehensive strategy for Q1 initiatives and team coordination",
-    status: "Complete",
-    priority: "High",
-    assignedAgent: "Alex",
-    avatar: "🧑‍💼",
-    avatarUrl: "/avatars/alex.jpg",
-    progress: 100,
+    title: "Strategic Planning Session",
+    description: "Quarterly planning and goal setting",
+    status: "in-progress",
+    priority: "high",
     dueDate: "2024-01-20",
-    estimatedHours: 16,
-    actualHours: 14
+    assignedAgent: "Alex",
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=alex&backgroundColor=8b5cf6",
+    completedSubtasks: 3,
+    totalSubtasks: 5
   },
   {
-    id: 2,
-    title: "Campaign Visual Assets",
-    description: "Create engaging visual content for marketing campaign launch",
-    status: "In Progress",
-    priority: "High",
+    id: 2, 
+    title: "Brand Identity Refresh",
+    description: "Update visual branding guidelines",
+    status: "pending",
+    priority: "medium",
+    dueDate: "2024-01-25",
     assignedAgent: "Dana",
-    avatar: "⚙️",
-    avatarUrl: "/avatars/dana.jpg",
-    progress: 75,
-    dueDate: "2024-01-18",
-    estimatedHours: 12,
-    actualHours: 8
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=dana&backgroundColor=ec4899",
+    completedSubtasks: 0,
+    totalSubtasks: 8
   },
   {
     id: 3,
-    title: "Team Morale Survey",
-    description: "Conduct quarterly team satisfaction and morale assessment",
-    status: "Review",
-    priority: "Medium",
+    title: "Team Sync Meeting",
+    description: "Weekly coordination and updates", 
+    status: "completed",
+    priority: "medium",
+    dueDate: "2024-01-18",
     assignedAgent: "Jamie",
-    avatar: "🛡️",
-    avatarUrl: "/avatars/jamie.jpg",
-    progress: 90,
-    dueDate: "2024-01-22",
-    estimatedHours: 6,
-    actualHours: 5
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=jamie&backgroundColor=3b82f6",
+    completedSubtasks: 4,
+    totalSubtasks: 4
   },
   {
     id: 4,
-    title: "Performance Analytics Report",
-    description: "Generate comprehensive analytics report with KPI tracking",
-    status: "Assigned",
-    priority: "Medium",
+    title: "Performance Analytics",
+    description: "Monthly metrics analysis and reporting",
+    status: "in-progress", 
+    priority: "high",
+    dueDate: "2024-01-22",
     assignedAgent: "Riley",
-    avatar: "✍️",
-    avatarUrl: "/avatars/riley.jpg",
-    progress: 25,
-    dueDate: "2024-01-25",
-    estimatedHours: 10,
-    actualHours: 2
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=riley&backgroundColor=10b981",
+    completedSubtasks: 2,
+    totalSubtasks: 6
   },
   {
     id: 5,
-    title: "Customer Support Escalation",
-    description: "Handle urgent customer issues and crisis response",
-    status: "Failed",
-    priority: "High",
+    title: "Documentation Update", 
+    description: "Update support documentation",
+    status: "pending",
+    priority: "low",
+    dueDate: "2024-01-30",
     assignedAgent: "Toby",
-    avatar: "👨‍💻",
-    avatarUrl: "/avatars/toby.jpg",
-    progress: 40,
-    dueDate: "2024-01-16",
-    estimatedHours: 4,
-    actualHours: 6
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=toby&backgroundColor=f59e0b",
+    completedSubtasks: 0, 
+    totalSubtasks: 3
   },
   {
     id: 6,
-    title: "Internal Communication Strategy",
-    description: "Develop internal messaging framework for team coordination",
-    status: "In Progress",
-    priority: "Low",
+    title: "Process Optimization",
+    description: "Streamline internal workflows",
+    status: "completed",
+    priority: "medium", 
+    dueDate: "2024-01-16",
     assignedAgent: "Jamie",
-    avatar: "🛡️",
-    avatarUrl: "/avatars/jamie.jpg",
-    progress: 60,
-    dueDate: "2024-01-30",
-    estimatedHours: 8,
-    actualHours: 4
+    avatarUrl: "https://api.dicebear.com/9.x/croodles/svg?seed=jamie&backgroundColor=3b82f6",
+    completedSubtasks: 7,
+    totalSubtasks: 7
   }
 ]
 
@@ -276,19 +264,19 @@ export default function TasksPage() {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
                           <AvatarImage 
-                            src={`https://api.dicebear.com/9.x/croodles/svg?seed=${task.assignedAgent.toLowerCase()}&size=100`}
+                            src={task.avatarUrl}
                             alt={task.assignedAgent} 
                           />
-                          <AvatarFallback>{task.avatar}</AvatarFallback>
+                          <AvatarFallback>{task.assignedAgent}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm font-medium">{task.assignedAgent}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        <Progress value={task.progress} className="w-16" />
+                        <Progress value={task.completedSubtasks / task.totalSubtasks * 100} className="w-16" />
                         <div className="text-xs text-muted-foreground">
-                          {task.progress}%
+                          {task.completedSubtasks} / {task.totalSubtasks}
                         </div>
                       </div>
                     </TableCell>
@@ -297,9 +285,9 @@ export default function TasksPage() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div>{task.actualHours}h / {task.estimatedHours}h</div>
+                        <div>{task.completedSubtasks}h / {task.totalSubtasks}h</div>
                         <div className="text-xs text-muted-foreground">
-                          {task.actualHours <= task.estimatedHours ? "On track" : "Over budget"}
+                          {task.completedSubtasks <= task.totalSubtasks ? "On track" : "Over budget"}
                         </div>
                       </div>
                     </TableCell>
